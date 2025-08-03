@@ -3,20 +3,47 @@
             try {
                 updateConnectionStatus('loading');
                 
-                // Load data from Google Sheets
-                const result = await googleAPI.loadData();
+                if (googleAPI.scriptUrl) {
+                    // Try to load data from Google Sheets
+                    const result = await googleAPI.loadData();
+                    
+                    if (result.success && result.data.length > 0) {
+                        // Merge Google Sheets data with local data
+                        const sheetsData = result.data;
+                        const mergedData = [...tables]; // Start with local data
+                        
+                        // Add unique data from Google Sheets
+                        sheetsData.forEach(sheetTable => {
+                            const exists = mergedData.find(localTable => 
+                                localTable.id === sheetTable.id || 
+                                (localTable.visitDate === sheetTable.visitDate && 
+                                 localTable.tableNumber === sheetTable.tableNumber &&
+                                 localTable.totalBill === sheetTable.totalBill)
+                            );
+                            
+                            if (!exists) {
+                                mergedData.push(sheetTable);
+                            }
+                        });
+                        
+                        filteredTables = mergedData;
+                        showSuccessAlert(`ซิงค์ข้อมูลสำเร็จ - พบข้อมูล ${mergedData.length} โต๊ะ (${sheetsData.length} จาก Google Sheets)`);
+                    } else {
+                        // Use only local data
+                        filteredTables = [...tables];
+                        showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ไม่พบข้อมูลใน Google Sheets`);
+                    }
+                } else {
+                    filteredTables = [...tables];
+                    showWarningAlert('ยังไม่ได้ตั้งค่า Google Sheets - ใช้ข้อมูลในเครื่อง');
+                }
                 
-                // For now, use local data + simulate some Google Sheets data
-                // In real implementation, this would merge local + Google Sheets data
-                filteredTables = [...tables];
-                
-                showSuccessAlert('ซิงค์ข้อมูลสำเร็จ - ใช้ข้อมูลรวมจากเครื่อง + Google Sheets');
                 applyFilters();
                 
             } catch (error) {
                 console.error('Sync error:', error);
-                showWarningAlert('ใช้ข้อมูลในเครื่อง - ไม่สามารถเชื่อมต่อ Google Sheets');
                 filteredTables = [...tables];
+                showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ไม่สามารถเชื่อมต่อ Google Sheets: ${error.message}`);
                 applyFilters();
             }
         }
@@ -509,8 +536,23 @@
 
         // Initialize analytics when tab is shown
         function initializeAnalytics() {
-            // Auto-sync data when entering analytics tab
-            syncAnalyticsData();
+            // Start with local data
+            filteredTables = [...tables];
+            
+            if (filteredTables.length === 0) {
+                // No local data, try to sync from Google Sheets
+                syncAnalyticsData();
+            } else {
+                // Show local data first, then sync in background
+                applyFilters();
+                
+                // Auto-sync in background if Google Sheets is configured
+                if (googleAPI.scriptUrl) {
+                    setTimeout(() => {
+                        syncAnalyticsData();
+                    }, 1000);
+                }
+            }
         }
 
         // Update analytics (legacy function - now calls new analytics)
@@ -1661,13 +1703,32 @@
             }
 
             async loadData() {
+                if (!this.scriptUrl) {
+                    throw new Error('ยังไม่ได้ตั้งค่า Google Apps Script URL');
+                }
+
                 try {
                     updateConnectionStatus('loading');
-                    updateConnectionStatus('online');
-                    return { success: true, data: [], message: 'ใช้งานโหมดออฟไลน์' };
+                    
+                    // Try to fetch data from Google Sheets
+                    const response = await fetch(this.scriptUrl + '?action=getData', {
+                        method: 'GET',
+                        mode: 'cors'
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        updateConnectionStatus('online');
+                        return { success: true, data: data.tables || [], message: 'โหลดข้อมูลจาก Google Sheets สำเร็จ' };
+                    } else {
+                        throw new Error('ไม่สามารถดึงข้อมูลได้');
+                    }
+                    
                 } catch (error) {
-                    updateConnectionStatus('error');
-                    throw new Error('ไม่สามารถโหลดข้อมูลได้: ' + error.message);
+                    // Fallback to offline mode
+                    updateConnectionStatus('offline');
+                    console.log('Using offline mode:', error);
+                    return { success: true, data: [], message: 'ใช้งานโหมดออฟไลน์' };
                 }
             }
 
@@ -1841,13 +1902,49 @@
 
         // Load data from Google Sheets
         function loadDataFromSheets() {
+            if (!googleAPI.scriptUrl) {
+                showErrorAlert('กรุณาตั้งค่า Google Apps Script URL ก่อน');
+                return;
+            }
+            
             googleAPI.loadData()
                 .then(result => {
-                    showSuccessAlert('โหลดข้อมูลจาก Google Sheets เรียบร้อย (โหมดออฟไลน์)');
+                    if (result.success && result.data.length > 0) {
+                        // Merge with local data
+                        const sheetsData = result.data;
+                        let newDataCount = 0;
+                        
+                        sheetsData.forEach(sheetTable => {
+                            const exists = tables.find(localTable => 
+                                localTable.id === sheetTable.id ||
+                                (localTable.visitDate === sheetTable.visitDate && 
+                                 localTable.tableNumber === sheetTable.tableNumber &&
+                                 localTable.totalBill === sheetTable.totalBill)
+                            );
+                            
+                            if (!exists) {
+                                tables.push(sheetTable);
+                                newDataCount++;
+                            }
+                        });
+                        
+                        // Save merged data locally
+                        saveLocalData();
+                        updateStats();
+                        updateTableList();
+                        
+                        if (newDataCount > 0) {
+                            showSuccessAlert(`โหลดข้อมูลใหม่ ${newDataCount} โต๊ะจาก Google Sheets (รวม ${tables.length} โต๊ะ)`);
+                        } else {
+                            showSuccessAlert(`ข้อมูลล่าสุดแล้ว - มีข้อมูลทั้งหมด ${tables.length} โต๊ะ`);
+                        }
+                    } else {
+                        showSuccessAlert(`${result.message} - มีข้อมูลในเครื่อง ${tables.length} โต๊ะ`);
+                    }
                 })
                 .catch(error => {
                     console.error('Error loading data:', error);
-                    showErrorAlert(error.message);
+                    showErrorAlert(`ไม่สามารถโหลดข้อมูลได้: ${error.message}`);
                 });
         }
 
