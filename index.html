@@ -1,572 +1,4 @@
-// Sync analytics data from Google Sheets
-        async function syncAnalyticsData() {
-            try {
-                updateConnectionStatus('loading');
-                
-                if (googleAPI.scriptUrl) {
-                    console.log('Syncing data from Google Sheets...');
-                    
-                    // Try to load data from Google Sheets
-                    const result = await googleAPI.loadData();
-                    console.log('Google Sheets result:', result);
-                    
-                    if (result.success && result.data && result.data.length > 0) {
-                        // Use Google Sheets data as primary source
-                        filteredTables = result.data;
-                        
-                        // Also merge with local data to avoid losing recent entries
-                        const mergedData = [...result.data];
-                        tables.forEach(localTable => {
-                            const exists = result.data.find(sheetTable => 
-                                Math.abs(new Date(sheetTable.visitDate) - new Date(localTable.visitDate)) < 86400000 && // same day
-                                sheetTable.tableNumber === localTable.tableNumber &&
-                                Math.abs(sheetTable.totalBill - localTable.totalBill) < 0.01 // same bill amount
-                            );
-                            
-                            if (!exists) {
-                                mergedData.push(localTable);
-                            }
-                        });
-                        
-                        filteredTables = mergedData;
-                        showSuccessAlert(`ซิงค์สำเร็จ! แสดงข้อมูล ${mergedData.length} โต๊ะ (${result.data.length} จาก Google Sheets)`);
-                    } else {
-                        // Use only local data
-                        filteredTables = [...tables];
-                        showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ${result.message || 'ไม่พบข้อมูลใน Google Sheets'}`);
-                    }
-                } else {
-                    filteredTables = [...tables];
-                    showWarningAlert('ยังไม่ได้ตั้งค่า Google Sheets URL - ใช้ข้อมูลในเครื่อง');
-                }
-                
-                console.log('Filtered tables:', filteredTables.length);
-                applyFilters();
-                
-            } catch (error) {
-                console.error('Sync error:', error);
-                filteredTables = [...tables];
-                showErrorAlert(`Error: ${error.message} - ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ`);
-                applyFilters();
-            }
-        }
-
-        // Apply filters to data
-        function applyFilters() {
-            const dateRange = document.getElementById('dateRangeFilter').value;
-            const dayOfWeek = document.getElementById('dayOfWeekFilter').value;
-            const timeSlot = document.getElementById('timeSlotFilter').value;
-            const customerGroup = document.getElementById('customerGroupFilter').value;
-            
-            // Show/hide custom date range
-            const customDateRange = document.getElementById('customDateRange');
-            if (dateRange === 'custom') {
-                customDateRange.style.display = 'flex';
-            } else {
-                customDateRange.style.display = 'none';
-            }
-
-            // Start with all tables
-            filteredTables = [...tables];
-
-            // Apply date range filter
-            if (dateRange !== 'all') {
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                
-                filteredTables = filteredTables.filter(table => {
-                    const tableDate = new Date(table.visitDate || table.date);
-                    const tableDateOnly = new Date(tableDate.getFullYear(), tableDate.getMonth(), tableDate.getDate());
-                    
-                    switch (dateRange) {
-                        case 'today':
-                            return tableDateOnly.getTime() === today.getTime();
-                        case 'week':
-                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                            return tableDateOnly >= weekAgo;
-                        case 'month':
-                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                            return tableDateOnly >= monthAgo;
-                        case 'custom':
-                            const startDate = document.getElementById('startDate').value;
-                            const endDate = document.getElementById('endDate').value;
-                            if (startDate && endDate) {
-                                const start = new Date(startDate);
-                                const end = new Date(endDate);
-                                return tableDateOnly >= start && tableDateOnly <= end;
-                            }
-                            return true;
-                        default:
-                            return true;
-                    }
-                });
-            }
-
-            // Apply day of week filter
-            if (dayOfWeek !== 'all') {
-                filteredTables = filteredTables.filter(table => {
-                    const tableDate = new Date(table.visitDate || table.date);
-                    return tableDate.getDay().toString() === dayOfWeek;
-                });
-            }
-
-            // Apply time slot filter
-            if (timeSlot !== 'all') {
-                filteredTables = filteredTables.filter(table => {
-                    const visitTime = table.visitTime;
-                    if (!visitTime) return false;
-                    
-                    const hour = parseInt(visitTime.split(':')[0]);
-                    switch (timeSlot) {
-                        case 'morning':
-                            return hour >= 11 && hour < 14;
-                        case 'afternoon':
-                            return hour >= 14 && hour < 17;
-                        case 'evening':
-                            return hour >= 17 && hour < 20;
-                        case 'night':
-                            return hour >= 20 && hour < 23;
-                        default:
-                            return true;
-                    }
-                });
-            }
-
-            // Apply customer group filter
-            if (customerGroup !== 'all') {
-                filteredTables = filteredTables.filter(table => table.customerGroup === customerGroup);
-            }
-
-            // Update analytics display
-            updateAnalyticsDisplay();
-        }
-
-        // Update analytics display with filtered data
-        function updateAnalyticsDisplay() {
-            updateAnalyticsMetrics();
-            updateAnalyticsCharts();
-            updateAnalyticsDetailTable();
-        }
-
-        // Update analytics metrics
-        function updateAnalyticsMetrics() {
-            const totalTables = filteredTables.length;
-            const totalCustomers = filteredTables.reduce((sum, table) => sum + table.customers.length, 0);
-            const totalRevenue = filteredTables.reduce((sum, table) => sum + parseFloat(table.totalBill || 0), 0);
-            const avgPerHead = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
-
-            document.getElementById('totalTablesAnalytics').textContent = totalTables.toLocaleString();
-            document.getElementById('totalCustomersAnalytics').textContent = totalCustomers.toLocaleString();
-            document.getElementById('totalRevenueAnalytics').textContent = totalRevenue.toLocaleString();
-            document.getElementById('avgPerHeadAnalytics').textContent = Math.round(avgPerHead).toLocaleString();
-        }
-
-        // Update all analytics charts
-        function updateAnalyticsCharts() {
-            updateCustomerGroupChart();
-            updateGenderChart();
-            updateTimeSlotRevenueChart();
-            updateDayOfWeekRevenueChart();
-            updateAgeGroupChart();
-            updateDailyTrendChart();
-        }
-
-        // Customer Group Pie Chart
-        function updateCustomerGroupChart() {
-            const ctx = document.getElementById('customerGroupChart').getContext('2d');
-            
-            // Destroy existing chart
-            if (analyticsCharts.customerGroup) {
-                analyticsCharts.customerGroup.destroy();
-            }
-
-            // Calculate data
-            const groupData = {};
-            filteredTables.forEach(table => {
-                const group = table.customerGroup || 'ไม่ระบุ';
-                groupData[group] = (groupData[group] || 0) + 1;
-            });
-
-            const labels = Object.keys(groupData);
-            const data = Object.values(groupData);
-            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-
-            analyticsCharts.customerGroup = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: colors.slice(0, labels.length),
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Gender Pie Chart
-        function updateGenderChart() {
-            const ctx = document.getElementById('genderChart').getContext('2d');
-            
-            if (analyticsCharts.gender) {
-                analyticsCharts.gender.destroy();
-            }
-
-            const genderData = {};
-            filteredTables.forEach(table => {
-                table.customers.forEach(customer => {
-                    const gender = customer.gender || 'ไม่ระบุ';
-                    genderData[gender] = (genderData[gender] || 0) + 1;
-                });
-            });
-
-            const labels = Object.keys(genderData);
-            const data = Object.values(genderData);
-            const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF'];
-
-            analyticsCharts.gender = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: colors.slice(0, labels.length),
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Time Slot Revenue Chart
-        function updateTimeSlotRevenueChart() {
-            const ctx = document.getElementById('timeSlotRevenueChart').getContext('2d');
-            
-            if (analyticsCharts.timeSlotRevenue) {
-                analyticsCharts.timeSlotRevenue.destroy();
-            }
-
-            const timeSlots = [
-                '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
-                '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00',
-                '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00'
-            ];
-
-            const revenueData = {};
-            timeSlots.forEach(slot => revenueData[slot] = 0);
-
-            filteredTables.forEach(table => {
-                const timeSlot = table.visitTime;
-                if (timeSlot && revenueData.hasOwnProperty(timeSlot)) {
-                    revenueData[timeSlot] += parseFloat(table.totalBill || 0);
-                }
-            });
-
-            analyticsCharts.timeSlotRevenue = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: timeSlots,
-                    datasets: [{
-                        label: 'ยอดขาย (฿)',
-                        data: Object.values(revenueData),
-                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return '฿' + value.toLocaleString();
-                                }
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                maxRotation: 45
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        }
-
-        // Day of Week Revenue Chart
-        function updateDayOfWeekRevenueChart() {
-            const ctx = document.getElementById('dayOfWeekRevenueChart').getContext('2d');
-            
-            if (analyticsCharts.dayOfWeekRevenue) {
-                analyticsCharts.dayOfWeekRevenue.destroy();
-            }
-
-            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-            const revenueData = [0, 0, 0, 0, 0, 0, 0];
-
-            filteredTables.forEach(table => {
-                const tableDate = new Date(table.visitDate || table.date);
-                const dayOfWeek = tableDate.getDay();
-                revenueData[dayOfWeek] += parseFloat(table.totalBill || 0);
-            });
-
-            analyticsCharts.dayOfWeekRevenue = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: days,
-                    datasets: [{
-                        label: 'ยอดขาย (฿)',
-                        data: revenueData,
-                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return '฿' + value.toLocaleString();
-                                }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        }
-
-        // Age Group Chart
-        function updateAgeGroupChart() {
-            const ctx = document.getElementById('ageGroupChart').getContext('2d');
-            
-            if (analyticsCharts.ageGroup) {
-                analyticsCharts.ageGroup.destroy();
-            }
-
-            const ageGroups = ['0-12', '13-17', '18-25', '26-35', '36-45', '46-55', '56-65', '66+'];
-            const ageData = {};
-            ageGroups.forEach(age => ageData[age] = 0);
-
-            filteredTables.forEach(table => {
-                table.customers.forEach(customer => {
-                    const age = customer.age;
-                    if (age && ageData.hasOwnProperty(age)) {
-                        ageData[age]++;
-                    }
-                });
-            });
-
-            analyticsCharts.ageGroup = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ageGroups.map(age => age + ' ปี'),
-                    datasets: [{
-                        label: 'จำนวนลูกค้า',
-                        data: Object.values(ageData),
-                        backgroundColor: 'rgba(255, 206, 86, 0.7)',
-                        borderColor: 'rgba(255, 206, 86, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        }
-
-        // Daily Trend Chart
-        function updateDailyTrendChart() {
-            const ctx = document.getElementById('dailyTrendChart').getContext('2d');
-            
-            if (analyticsCharts.dailyTrend) {
-                analyticsCharts.dailyTrend.destroy();
-            }
-
-            // Group data by date
-            const dailyData = {};
-            filteredTables.forEach(table => {
-                const date = new Date(table.visitDate || table.date).toDateString();
-                if (!dailyData[date]) {
-                    dailyData[date] = 0;
-                }
-                dailyData[date] += parseFloat(table.totalBill || 0);
-            });
-
-            // Sort dates
-            const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a) - new Date(b));
-            const labels = sortedDates.map(date => new Date(date).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }));
-            const data = sortedDates.map(date => dailyData[date]);
-
-            analyticsCharts.dailyTrend = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'ยอดขายรายวัน (฿)',
-                        data: data,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return '฿' + value.toLocaleString();
-                                }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        }
-
-        // Update analytics detail table
-        function updateAnalyticsDetailTable() {
-            const tbody = document.getElementById('analyticsDetailTableBody');
-            if (!tbody) return;
-            
-            tbody.innerHTML = '';
-
-            // Calculate group statistics
-            const groupStats = {};
-            const totalRevenue = filteredTables.reduce((sum, t) => sum + t.totalBill, 0);
-            
-            filteredTables.forEach(table => {
-                const group = table.customerGroup;
-                if (!groupStats[group]) {
-                    groupStats[group] = {
-                        tableCount: 0,
-                        customerCount: 0,
-                        totalRevenue: 0
-                    };
-                }
-                
-                groupStats[group].tableCount++;
-                groupStats[group].customerCount += table.customers.length;
-                groupStats[group].totalRevenue += table.totalBill;
-            });
-
-            Object.keys(groupStats).forEach(group => {
-                const stats = groupStats[group];
-                const avgBill = stats.totalRevenue / stats.tableCount;
-                const avgPerHead = stats.totalRevenue / stats.customerCount;
-                const revenuePercent = totalRevenue > 0 ? ((stats.totalRevenue / totalRevenue) * 100).toFixed(1) : 0;
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td><strong>${group}</strong></td>
-                    <td>${stats.tableCount}</td>
-                    <td>${stats.customerCount}</td>
-                    <td>฿${stats.totalRevenue.toLocaleString()}</td>
-                    <td>฿${Math.round(avgBill).toLocaleString()}</td>
-                    <td>฿${Math.round(avgPerHead).toLocaleString()}</td>
-                    <td>${revenuePercent}%</td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        // Initialize analytics when tab is shown
-        function initializeAnalytics() {
-            // Start with local data
-            filteredTables = [...tables];
-            
-            if (filteredTables.length === 0) {
-                // No local data, try to sync from Google Sheets
-                syncAnalyticsData();
-            } else {
-                // Show local data first, then sync in background
-                applyFilters();
-                
-                // Auto-sync in background if Google Sheets is configured
-                if (googleAPI.scriptUrl) {
-                    setTimeout(() => {
-                        syncAnalyticsData();
-                    }, 1000);
-                }
-            }
-        }
-
-        // Update analytics (legacy function - now calls new analytics)
-        function updateAnalytics() {
-            updateAnalyticsDisplay();
-        }
-
-        // Update group analytics (legacy function)
-        function updateGroupAnalytics() {
-            updateAnalyticsDetailTable();
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
@@ -1600,6 +1032,576 @@
         const VALID_USERNAME = 'issho';
         const VALID_PASSWORD = 'issho2323';
 
+        // Sync analytics data from Google Sheets
+        async function syncAnalyticsData() {
+            try {
+                updateConnectionStatus('loading');
+                
+                if (googleAPI.scriptUrl) {
+                    console.log('Syncing data from Google Sheets...');
+                    
+                    // Try to load data from Google Sheets
+                    const result = await googleAPI.loadData();
+                    console.log('Google Sheets result:', result);
+                    
+                    if (result.success && result.data && result.data.length > 0) {
+                        // Use Google Sheets data as primary source
+                        filteredTables = result.data;
+                        
+                        // Also merge with local data to avoid losing recent entries
+                        const mergedData = [...result.data];
+                        tables.forEach(localTable => {
+                            const exists = result.data.find(sheetTable => 
+                                Math.abs(new Date(sheetTable.visitDate) - new Date(localTable.visitDate)) < 86400000 && // same day
+                                sheetTable.tableNumber === localTable.tableNumber &&
+                                Math.abs(sheetTable.totalBill - localTable.totalBill) < 0.01 // same bill amount
+                            );
+                            
+                            if (!exists) {
+                                mergedData.push(localTable);
+                            }
+                        });
+                        
+                        filteredTables = mergedData;
+                        showSuccessAlert(`ซิงค์สำเร็จ! แสดงข้อมูล ${mergedData.length} โต๊ะ (${result.data.length} จาก Google Sheets)`);
+                    } else {
+                        // Use only local data
+                        filteredTables = [...tables];
+                        showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ${result.message || 'ไม่พบข้อมูลใน Google Sheets'}`);
+                    }
+                } else {
+                    filteredTables = [...tables];
+                    showWarningAlert('ยังไม่ได้ตั้งค่า Google Sheets URL - ใช้ข้อมูลในเครื่อง');
+                }
+                
+                console.log('Filtered tables:', filteredTables.length);
+                applyFilters();
+                
+            } catch (error) {
+                console.error('Sync error:', error);
+                filteredTables = [...tables];
+                showErrorAlert(`Error: ${error.message} - ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ`);
+                applyFilters();
+            }
+        }
+
+        // Apply filters to data
+        function applyFilters() {
+            const dateRange = document.getElementById('dateRangeFilter').value;
+            const dayOfWeek = document.getElementById('dayOfWeekFilter').value;
+            const timeSlot = document.getElementById('timeSlotFilter').value;
+            const customerGroup = document.getElementById('customerGroupFilter').value;
+            
+            // Show/hide custom date range
+            const customDateRange = document.getElementById('customDateRange');
+            if (dateRange === 'custom') {
+                customDateRange.style.display = 'flex';
+            } else {
+                customDateRange.style.display = 'none';
+            }
+
+            // Start with all tables
+            filteredTables = [...tables];
+
+            // Apply date range filter
+            if (dateRange !== 'all') {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                
+                filteredTables = filteredTables.filter(table => {
+                    const tableDate = new Date(table.visitDate || table.date);
+                    const tableDateOnly = new Date(tableDate.getFullYear(), tableDate.getMonth(), tableDate.getDate());
+                    
+                    switch (dateRange) {
+                        case 'today':
+                            return tableDateOnly.getTime() === today.getTime();
+                        case 'week':
+                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            return tableDateOnly >= weekAgo;
+                        case 'month':
+                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            return tableDateOnly >= monthAgo;
+                        case 'custom':
+                            const startDate = document.getElementById('startDate').value;
+                            const endDate = document.getElementById('endDate').value;
+                            if (startDate && endDate) {
+                                const start = new Date(startDate);
+                                const end = new Date(endDate);
+                                return tableDateOnly >= start && tableDateOnly <= end;
+                            }
+                            return true;
+                        default:
+                            return true;
+                    }
+                });
+            }
+
+            // Apply day of week filter
+            if (dayOfWeek !== 'all') {
+                filteredTables = filteredTables.filter(table => {
+                    const tableDate = new Date(table.visitDate || table.date);
+                    return tableDate.getDay().toString() === dayOfWeek;
+                });
+            }
+
+            // Apply time slot filter
+            if (timeSlot !== 'all') {
+                filteredTables = filteredTables.filter(table => {
+                    const visitTime = table.visitTime;
+                    if (!visitTime) return false;
+                    
+                    const hour = parseInt(visitTime.split(':')[0]);
+                    switch (timeSlot) {
+                        case 'morning':
+                            return hour >= 11 && hour < 14;
+                        case 'afternoon':
+                            return hour >= 14 && hour < 17;
+                        case 'evening':
+                            return hour >= 17 && hour < 20;
+                        case 'night':
+                            return hour >= 20 && hour < 23;
+                        default:
+                            return true;
+                    }
+                });
+            }
+
+            // Apply customer group filter
+            if (customerGroup !== 'all') {
+                filteredTables = filteredTables.filter(table => table.customerGroup === customerGroup);
+            }
+
+            // Update analytics display
+            updateAnalyticsDisplay();
+        }
+
+        // Update analytics display with filtered data
+        function updateAnalyticsDisplay() {
+            updateAnalyticsMetrics();
+            updateAnalyticsCharts();
+            updateAnalyticsDetailTable();
+        }
+
+        // Update analytics metrics
+        function updateAnalyticsMetrics() {
+            const totalTables = filteredTables.length;
+            const totalCustomers = filteredTables.reduce((sum, table) => sum + table.customers.length, 0);
+            const totalRevenue = filteredTables.reduce((sum, table) => sum + parseFloat(table.totalBill || 0), 0);
+            const avgPerHead = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+            document.getElementById('totalTablesAnalytics').textContent = totalTables.toLocaleString();
+            document.getElementById('totalCustomersAnalytics').textContent = totalCustomers.toLocaleString();
+            document.getElementById('totalRevenueAnalytics').textContent = totalRevenue.toLocaleString();
+            document.getElementById('avgPerHeadAnalytics').textContent = Math.round(avgPerHead).toLocaleString();
+        }
+
+        // Update all analytics charts
+        function updateAnalyticsCharts() {
+            updateCustomerGroupChart();
+            updateGenderChart();
+            updateTimeSlotRevenueChart();
+            updateDayOfWeekRevenueChart();
+            updateAgeGroupChart();
+            updateDailyTrendChart();
+        }
+
+        // Customer Group Pie Chart
+        function updateCustomerGroupChart() {
+            const ctx = document.getElementById('customerGroupChart').getContext('2d');
+            
+            // Destroy existing chart
+            if (analyticsCharts.customerGroup) {
+                analyticsCharts.customerGroup.destroy();
+            }
+
+            // Calculate data
+            const groupData = {};
+            filteredTables.forEach(table => {
+                const group = table.customerGroup || 'ไม่ระบุ';
+                groupData[group] = (groupData[group] || 0) + 1;
+            });
+
+            const labels = Object.keys(groupData);
+            const data = Object.values(groupData);
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+
+            analyticsCharts.customerGroup = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Gender Pie Chart
+        function updateGenderChart() {
+            const ctx = document.getElementById('genderChart').getContext('2d');
+            
+            if (analyticsCharts.gender) {
+                analyticsCharts.gender.destroy();
+            }
+
+            const genderData = {};
+            filteredTables.forEach(table => {
+                table.customers.forEach(customer => {
+                    const gender = customer.gender || 'ไม่ระบุ';
+                    genderData[gender] = (genderData[gender] || 0) + 1;
+                });
+            });
+
+            const labels = Object.keys(genderData);
+            const data = Object.values(genderData);
+            const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF'];
+
+            analyticsCharts.gender = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Time Slot Revenue Chart
+        function updateTimeSlotRevenueChart() {
+            const ctx = document.getElementById('timeSlotRevenueChart').getContext('2d');
+            
+            if (analyticsCharts.timeSlotRevenue) {
+                analyticsCharts.timeSlotRevenue.destroy();
+            }
+
+            const timeSlots = [
+                '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
+                '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00',
+                '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00'
+            ];
+
+            const revenueData = {};
+            timeSlots.forEach(slot => revenueData[slot] = 0);
+
+            filteredTables.forEach(table => {
+                const timeSlot = table.visitTime;
+                if (timeSlot && revenueData.hasOwnProperty(timeSlot)) {
+                    revenueData[timeSlot] += parseFloat(table.totalBill || 0);
+                }
+            });
+
+            analyticsCharts.timeSlotRevenue = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: timeSlots,
+                    datasets: [{
+                        label: 'ยอดขาย (฿)',
+                        data: Object.values(revenueData),
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '฿' + value.toLocaleString();
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Day of Week Revenue Chart
+        function updateDayOfWeekRevenueChart() {
+            const ctx = document.getElementById('dayOfWeekRevenueChart').getContext('2d');
+            
+            if (analyticsCharts.dayOfWeekRevenue) {
+                analyticsCharts.dayOfWeekRevenue.destroy();
+            }
+
+            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+            const revenueData = [0, 0, 0, 0, 0, 0, 0];
+
+            filteredTables.forEach(table => {
+                const tableDate = new Date(table.visitDate || table.date);
+                const dayOfWeek = tableDate.getDay();
+                revenueData[dayOfWeek] += parseFloat(table.totalBill || 0);
+            });
+
+            analyticsCharts.dayOfWeekRevenue = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'ยอดขาย (฿)',
+                        data: revenueData,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '฿' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Age Group Chart
+        function updateAgeGroupChart() {
+            const ctx = document.getElementById('ageGroupChart').getContext('2d');
+            
+            if (analyticsCharts.ageGroup) {
+                analyticsCharts.ageGroup.destroy();
+            }
+
+            const ageGroups = ['0-12', '13-17', '18-25', '26-35', '36-45', '46-55', '56-65', '66+'];
+            const ageData = {};
+            ageGroups.forEach(age => ageData[age] = 0);
+
+            filteredTables.forEach(table => {
+                table.customers.forEach(customer => {
+                    const age = customer.age;
+                    if (age && ageData.hasOwnProperty(age)) {
+                        ageData[age]++;
+                    }
+                });
+            });
+
+            analyticsCharts.ageGroup = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ageGroups.map(age => age + ' ปี'),
+                    datasets: [{
+                        label: 'จำนวนลูกค้า',
+                        data: Object.values(ageData),
+                        backgroundColor: 'rgba(255, 206, 86, 0.7)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Daily Trend Chart
+        function updateDailyTrendChart() {
+            const ctx = document.getElementById('dailyTrendChart').getContext('2d');
+            
+            if (analyticsCharts.dailyTrend) {
+                analyticsCharts.dailyTrend.destroy();
+            }
+
+            // Group data by date
+            const dailyData = {};
+            filteredTables.forEach(table => {
+                const date = new Date(table.visitDate || table.date).toDateString();
+                if (!dailyData[date]) {
+                    dailyData[date] = 0;
+                }
+                dailyData[date] += parseFloat(table.totalBill || 0);
+            });
+
+            // Sort dates
+            const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a) - new Date(b));
+            const labels = sortedDates.map(date => new Date(date).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }));
+            const data = sortedDates.map(date => dailyData[date]);
+
+            analyticsCharts.dailyTrend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'ยอดขายรายวัน (฿)',
+                        data: data,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '฿' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update analytics detail table
+        function updateAnalyticsDetailTable() {
+            const tbody = document.getElementById('analyticsDetailTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+
+            // Calculate group statistics
+            const groupStats = {};
+            const totalRevenue = filteredTables.reduce((sum, t) => sum + t.totalBill, 0);
+            
+            filteredTables.forEach(table => {
+                const group = table.customerGroup;
+                if (!groupStats[group]) {
+                    groupStats[group] = {
+                        tableCount: 0,
+                        customerCount: 0,
+                        totalRevenue: 0
+                    };
+                }
+                
+                groupStats[group].tableCount++;
+                groupStats[group].customerCount += table.customers.length;
+                groupStats[group].totalRevenue += table.totalBill;
+            });
+
+            Object.keys(groupStats).forEach(group => {
+                const stats = groupStats[group];
+                const avgBill = stats.totalRevenue / stats.tableCount;
+                const avgPerHead = stats.totalRevenue / stats.customerCount;
+                const revenuePercent = totalRevenue > 0 ? ((stats.totalRevenue / totalRevenue) * 100).toFixed(1) : 0;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${group}</strong></td>
+                    <td>${stats.tableCount}</td>
+                    <td>${stats.customerCount}</td>
+                    <td>฿${stats.totalRevenue.toLocaleString()}</td>
+                    <td>฿${Math.round(avgBill).toLocaleString()}</td>
+                    <td>฿${Math.round(avgPerHead).toLocaleString()}</td>
+                    <td>${revenuePercent}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Initialize analytics when tab is shown
+        function initializeAnalytics() {
+            // Start with local data
+            filteredTables = [...tables];
+            
+            if (filteredTables.length === 0) {
+                // No local data, try to sync from Google Sheets
+                syncAnalyticsData();
+            } else {
+                // Show local data first, then sync in background
+                applyFilters();
+                
+                // Auto-sync in background if Google Sheets is configured
+                if (googleAPI.scriptUrl) {
+                    setTimeout(() => {
+                        syncAnalyticsData();
+                    }, 1000);
+                }
+            }
+        }
+
+        // Update analytics (legacy function - now calls new analytics)
+        function updateAnalytics() {
+            updateAnalyticsDisplay();
+        }
+
+        // Update group analytics (legacy function)
+        function updateGroupAnalytics() {
+            updateAnalyticsDetailTable();
+        }
+
         // Authentication functions
         function checkLogin() {
             const savedLogin = sessionStorage.getItem('isshoLoggedIn');
@@ -2191,7 +2193,7 @@
             }
         }
 
-        // Add customer to table (แก้ไขให้มีข้อมูลเพศและอายุ)
+        // Add customer to table
         function addCustomer() {
             customerCounter++;
             const container = document.getElementById('customersContainer');
@@ -2439,104 +2441,6 @@
             }
         }
 
-        // Update analytics
-        function updateAnalytics() {
-            try {
-                if (tables.length === 0) {
-                    // Reset all analytics if no data
-                    const elements = {
-                        avgBillPerTable: document.getElementById('avgBillPerTable'),
-                        avgCustomersPerTable: document.getElementById('avgCustomersPerTable'),
-                        malePercentage: document.getElementById('malePercentage'),
-                        femalePercentage: document.getElementById('femalePercentage'),
-                        groupAnalyticsTable: document.getElementById('groupAnalyticsTable')
-                    };
-                    
-                    if (elements.avgBillPerTable) elements.avgBillPerTable.textContent = '0';
-                    if (elements.avgCustomersPerTable) elements.avgCustomersPerTable.textContent = '0';
-                    if (elements.malePercentage) elements.malePercentage.textContent = '0%';
-                    if (elements.femalePercentage) elements.femalePercentage.textContent = '0%';
-                    if (elements.groupAnalyticsTable) elements.groupAnalyticsTable.innerHTML = '';
-                    return;
-                }
-
-                // Calculate key metrics
-                const totalBills = tables.reduce((sum, t) => sum + t.totalBill, 0);
-                const totalCustomers = tables.reduce((sum, t) => sum + t.customers.length, 0);
-                const totalTablesCount = tables.length;
-
-                const allCustomers = tables.flatMap(t => t.customers);
-                const maleCount = allCustomers.filter(c => c.gender === 'ชาย').length;
-                const femaleCount = allCustomers.filter(c => c.gender === 'หญิง').length;
-
-                const elements = {
-                    avgBillPerTable: document.getElementById('avgBillPerTable'),
-                    avgCustomersPerTable: document.getElementById('avgCustomersPerTable'),
-                    malePercentage: document.getElementById('malePercentage'),
-                    femalePercentage: document.getElementById('femalePercentage')
-                };
-
-                if (elements.avgBillPerTable) elements.avgBillPerTable.textContent = Math.round(totalBills / totalTablesCount).toLocaleString();
-                if (elements.avgCustomersPerTable) elements.avgCustomersPerTable.textContent = (totalCustomers / totalTablesCount).toFixed(1);
-                if (elements.malePercentage) elements.malePercentage.textContent = totalCustomers > 0 ? Math.round((maleCount / totalCustomers) * 100) + '%' : '0%';
-                if (elements.femalePercentage) elements.femalePercentage.textContent = totalCustomers > 0 ? Math.round((femaleCount / totalCustomers) * 100) + '%' : '0%';
-
-                // Update group analytics
-                updateGroupAnalytics();
-            } catch (error) {
-                console.error('Error updating analytics:', error);
-            }
-        }
-
-        // Update group analytics
-        function updateGroupAnalytics() {
-            try {
-                const groupStats = {};
-                const totalRevenue = tables.reduce((sum, t) => sum + t.totalBill, 0);
-                
-                tables.forEach(table => {
-                    const group = table.customerGroup;
-                    if (!groupStats[group]) {
-                        groupStats[group] = {
-                            tableCount: 0,
-                            customerCount: 0,
-                            totalRevenue: 0
-                        };
-                    }
-                    
-                    groupStats[group].tableCount++;
-                    groupStats[group].customerCount += table.customers.length;
-                    groupStats[group].totalRevenue += table.totalBill;
-                });
-
-                const tbody = document.getElementById('groupAnalyticsTable');
-                if (!tbody) return;
-                
-                tbody.innerHTML = '';
-
-                Object.keys(groupStats).forEach(group => {
-                    const stats = groupStats[group];
-                    const avgBill = stats.totalRevenue / stats.tableCount;
-                    const avgPerHead = stats.totalRevenue / stats.customerCount;
-                    const revenuePercent = totalRevenue > 0 ? ((stats.totalRevenue / totalRevenue) * 100).toFixed(1) : 0;
-                    
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><strong>${group}</strong></td>
-                        <td>${stats.tableCount}</td>
-                        <td>${stats.customerCount}</td>
-                        <td>฿${stats.totalRevenue.toLocaleString()}</td>
-                        <td>฿${Math.round(avgBill).toLocaleString()}</td>
-                        <td>฿${Math.round(avgPerHead).toLocaleString()}</td>
-                        <td>${revenuePercent}%</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error updating group analytics:', error);
-            }
-        }
-
         // Export to CSV
         function exportToCSV() {
             try {
@@ -2630,24 +2534,11 @@
             }
         });
 
-        // Date range filter change handler
+        // Initialize when DOM loads
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded, initializing...');
             setupEventListeners();
             checkLogin();
-            
-            // Initialize date range filter
-            const dateRangeFilter = document.getElementById('dateRangeFilter');
-            if (dateRangeFilter) {
-                dateRangeFilter.addEventListener('change', function() {
-                    const customDateRange = document.getElementById('customDateRange');
-                    if (this.value === 'custom') {
-                        customDateRange.style.display = 'flex';
-                    } else {
-                        customDateRange.style.display = 'none';
-                    }
-                });
-            }
         });
     </script>
 </body>
