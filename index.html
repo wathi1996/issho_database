@@ -1,4 +1,71 @@
-<!DOCTYPE html>
+// Daily Trend Chart
+        function updateDailyTrendChart() {
+            const ctx = document.getElementById('dailyTrendChart').getContext('2d');
+            
+            if (analyticsCharts.dailyTrend) {
+                analyticsCharts.dailyTrend.destroy();
+            }
+
+            // Group data by date
+            const dailyData = {};
+            filteredTables.forEach(table => {
+                const date = new Date(table.visitDate || table.date).toDateString();
+                if (!dailyData[date]) {
+                    dailyData[date] = 0;
+                }
+                dailyData[date] += parseFloat(table.totalBill || 0);
+            });
+
+            // Sort dates
+            const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a) - new Date(b));
+            const labels = sortedDates.map(date => new Date(date).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }));
+            const data = sortedDates.map(date => dailyData[date]);
+            const totalRevenue = data.reduce((sum, value) => sum + value, 0);
+
+            analyticsCharts.dailyTrend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'ยอดขายรายวัน (฿)',
+                        data: data,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '฿' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const percentage = totalRevenue > 0 ? ((value / totalRevenue) * 100).toFixed(1) : 0;
+                                    return `ยอดขาย: ฿${value.toLocaleString()} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }<!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
@@ -810,13 +877,13 @@
 
                     <!-- Key Metrics -->
                     <div class="row mb-4">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="analytics-card">
                                 <div class="analytics-number" id="totalTablesAnalytics">0</div>
                                 <div>จำนวนโต๊ะ</div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="analytics-card">
                                 <div class="analytics-number" id="totalCustomersAnalytics">0</div>
                                 <div>จำนวนลูกค้า</div>
@@ -828,10 +895,16 @@
                                 <div>ยอดขายรวม (฿)</div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="analytics-card">
                                 <div class="analytics-number" id="avgPerHeadAnalytics">0</div>
                                 <div>เฉลี่ยต่อหัว (฿)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="analytics-card">
+                                <div class="analytics-number" id="avgPerBillAnalytics">0</div>
+                                <div>เฉลี่ยต่อบิล (฿)</div>
                             </div>
                         </div>
                     </div>
@@ -1188,11 +1261,13 @@
             const totalCustomers = filteredTables.reduce((sum, table) => sum + table.customers.length, 0);
             const totalRevenue = filteredTables.reduce((sum, table) => sum + parseFloat(table.totalBill || 0), 0);
             const avgPerHead = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+            const avgPerBill = totalTables > 0 ? totalRevenue / totalTables : 0;
 
             document.getElementById('totalTablesAnalytics').textContent = totalTables.toLocaleString();
             document.getElementById('totalCustomersAnalytics').textContent = totalCustomers.toLocaleString();
             document.getElementById('totalRevenueAnalytics').textContent = totalRevenue.toLocaleString();
             document.getElementById('avgPerHeadAnalytics').textContent = Math.round(avgPerHead).toLocaleString();
+            document.getElementById('avgPerBillAnalytics').textContent = Math.round(avgPerBill).toLocaleString();
         }
 
         // Update all analytics charts
@@ -1223,6 +1298,7 @@
 
             const labels = Object.keys(groupData);
             const data = Object.values(groupData);
+            const total = data.reduce((sum, value) => sum + value, 0);
             const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
 
             analyticsCharts.customerGroup = new Chart(ctx, {
@@ -1245,6 +1321,16 @@
                             labels: {
                                 padding: 20,
                                 usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: ${value} โต๊ะ (${percentage}%)`;
+                                }
                             }
                         }
                     }
@@ -1270,6 +1356,7 @@
 
             const labels = Object.keys(genderData);
             const data = Object.values(genderData);
+            const total = data.reduce((sum, value) => sum + value, 0);
             const colors = ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF'];
 
             analyticsCharts.gender = new Chart(ctx, {
@@ -1292,6 +1379,16 @@
                             labels: {
                                 padding: 20,
                                 usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: ${value} คน (${percentage}%)`;
+                                }
                             }
                         }
                     }
@@ -1322,6 +1419,8 @@
                     revenueData[timeSlot] += parseFloat(table.totalBill || 0);
                 }
             });
+
+            const totalRevenue = Object.values(revenueData).reduce((sum, value) => sum + value, 0);
 
             analyticsCharts.timeSlotRevenue = new Chart(ctx, {
                 type: 'bar',
@@ -1356,6 +1455,15 @@
                     plugins: {
                         legend: {
                             display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const percentage = totalRevenue > 0 ? ((value / totalRevenue) * 100).toFixed(1) : 0;
+                                    return `ยอดขาย: ฿${value.toLocaleString()} (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }
@@ -1378,6 +1486,8 @@
                 const dayOfWeek = tableDate.getDay();
                 revenueData[dayOfWeek] += parseFloat(table.totalBill || 0);
             });
+
+            const totalRevenue = revenueData.reduce((sum, value) => sum + value, 0);
 
             analyticsCharts.dayOfWeekRevenue = new Chart(ctx, {
                 type: 'bar',
@@ -1407,6 +1517,15 @@
                     plugins: {
                         legend: {
                             display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const percentage = totalRevenue > 0 ? ((value / totalRevenue) * 100).toFixed(1) : 0;
+                                    return `ยอดขาย: ฿${value.toLocaleString()} (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }
@@ -1434,6 +1553,8 @@
                 });
             });
 
+            const totalCustomers = Object.values(ageData).reduce((sum, value) => sum + value, 0);
+
             analyticsCharts.ageGroup = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -1460,6 +1581,15 @@
                     plugins: {
                         legend: {
                             display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const percentage = totalCustomers > 0 ? ((value / totalCustomers) * 100).toFixed(1) : 0;
+                                    return `จำนวน: ${value} คน (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }
