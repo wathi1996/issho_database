@@ -4,46 +4,49 @@
                 updateConnectionStatus('loading');
                 
                 if (googleAPI.scriptUrl) {
+                    console.log('Syncing data from Google Sheets...');
+                    
                     // Try to load data from Google Sheets
                     const result = await googleAPI.loadData();
+                    console.log('Google Sheets result:', result);
                     
-                    if (result.success && result.data.length > 0) {
-                        // Merge Google Sheets data with local data
-                        const sheetsData = result.data;
-                        const mergedData = [...tables]; // Start with local data
+                    if (result.success && result.data && result.data.length > 0) {
+                        // Use Google Sheets data as primary source
+                        filteredTables = result.data;
                         
-                        // Add unique data from Google Sheets
-                        sheetsData.forEach(sheetTable => {
-                            const exists = mergedData.find(localTable => 
-                                localTable.id === sheetTable.id || 
-                                (localTable.visitDate === sheetTable.visitDate && 
-                                 localTable.tableNumber === sheetTable.tableNumber &&
-                                 localTable.totalBill === sheetTable.totalBill)
+                        // Also merge with local data to avoid losing recent entries
+                        const mergedData = [...result.data];
+                        tables.forEach(localTable => {
+                            const exists = result.data.find(sheetTable => 
+                                Math.abs(new Date(sheetTable.visitDate) - new Date(localTable.visitDate)) < 86400000 && // same day
+                                sheetTable.tableNumber === localTable.tableNumber &&
+                                Math.abs(sheetTable.totalBill - localTable.totalBill) < 0.01 // same bill amount
                             );
                             
                             if (!exists) {
-                                mergedData.push(sheetTable);
+                                mergedData.push(localTable);
                             }
                         });
                         
                         filteredTables = mergedData;
-                        showSuccessAlert(`ซิงค์ข้อมูลสำเร็จ - พบข้อมูล ${mergedData.length} โต๊ะ (${sheetsData.length} จาก Google Sheets)`);
+                        showSuccessAlert(`ซิงค์สำเร็จ! แสดงข้อมูล ${mergedData.length} โต๊ะ (${result.data.length} จาก Google Sheets)`);
                     } else {
                         // Use only local data
                         filteredTables = [...tables];
-                        showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ไม่พบข้อมูลใน Google Sheets`);
+                        showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ${result.message || 'ไม่พบข้อมูลใน Google Sheets'}`);
                     }
                 } else {
                     filteredTables = [...tables];
-                    showWarningAlert('ยังไม่ได้ตั้งค่า Google Sheets - ใช้ข้อมูลในเครื่อง');
+                    showWarningAlert('ยังไม่ได้ตั้งค่า Google Sheets URL - ใช้ข้อมูลในเครื่อง');
                 }
                 
+                console.log('Filtered tables:', filteredTables.length);
                 applyFilters();
                 
             } catch (error) {
                 console.error('Sync error:', error);
                 filteredTables = [...tables];
-                showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ไม่สามารถเชื่อมต่อ Google Sheets: ${error.message}`);
+                showErrorAlert(`Error: ${error.message} - ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ`);
                 applyFilters();
             }
         }
@@ -1710,25 +1713,42 @@
                 try {
                     updateConnectionStatus('loading');
                     
+                    console.log('Fetching data from:', this.scriptUrl + '?action=getData');
+                    
                     // Try to fetch data from Google Sheets
                     const response = await fetch(this.scriptUrl + '?action=getData', {
                         method: 'GET',
-                        mode: 'cors'
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
                     });
+                    
+                    console.log('Response status:', response.status);
                     
                     if (response.ok) {
                         const data = await response.json();
+                        console.log('Received data:', data);
+                        
                         updateConnectionStatus('online');
-                        return { success: true, data: data.tables || [], message: 'โหลดข้อมูลจาก Google Sheets สำเร็จ' };
+                        
+                        return { 
+                            success: true, 
+                            data: data.tables || [], 
+                            message: data.message || 'โหลดข้อมูลจาก Google Sheets สำเร็จ' 
+                        };
                     } else {
-                        throw new Error('ไม่สามารถดึงข้อมูลได้');
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
                     
                 } catch (error) {
-                    // Fallback to offline mode
-                    updateConnectionStatus('offline');
-                    console.log('Using offline mode:', error);
-                    return { success: true, data: [], message: 'ใช้งานโหมดออฟไลน์' };
+                    console.error('Load data error:', error);
+                    updateConnectionStatus('error');
+                    
+                    return { 
+                        success: false, 
+                        data: [], 
+                        message: `ไม่สามารถเชื่อมต่อ Google Sheets: ${error.message}` 
+                    };
                 }
             }
 
