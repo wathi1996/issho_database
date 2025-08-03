@@ -1,4 +1,68 @@
-<!-- Group Analytics -->
+<input type="text" class="form-control" id="searchTable" placeholder="ค้นหาโต๊ะ..." style="width: 250px;">
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>วันที่</th>
+                                            <th>โต๊ะ</th>
+                                            <th>กลุ่มลูกค้า</th>
+                                            <th>จำนวนคน</th>
+                                            <th>ยอดขาย</th>
+                                            <th>เฉลี่ย/หัว</th>
+                                            <th>เวลา</th>
+                                            <th>พึงพอใจ</th>
+                                            <th>จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tableListBody">
+                                        <!-- Table data will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Tab -->
+                <div class="tab-pane fade" id="analytics" role="tabpanel">
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-success" onclick="exportToCSV()">
+                            <i class="fas fa-download me-2"></i>ส่งออกข้อมูล CSV
+                        </button>
+                    </div>
+
+                    <!-- Key Metrics -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="analytics-card">
+                                <div class="analytics-number" id="avgBillPerTable">0</div>
+                                <div>เฉลี่ยต่อบิล (฿)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="analytics-card">
+                                <div class="analytics-number" id="avgCustomersPerTable">0</div>
+                                <div>เฉลี่ยคน/โต๊ะ</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="analytics-card">
+                                <div class="analytics-number" id="malePercentage">0%</div>
+                                <div>ลูกค้าชาย</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="analytics-card">
+                                <div class="analytics-number" id="femalePercentage">0%</div>
+                                <div>ลูกค้าหญิง</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Group Analytics -->
                     <div class="card card-custom mb-4">
                         <div class="card-header bg-transparent">
                             <h6 class="mb-0"><i class="fas fa-chart-pie me-2 text-danger"></i>วิเคราะห์ตามกลุ่มลูกค้า</h6>
@@ -76,7 +140,7 @@
                                             <h6 class="mb-0"><i class="fas fa-database me-2"></i>จัดการข้อมูล</h6>
                                         </div>
                                         <div class="card-body">
-                                            <button class="btn btn-outline-warning w-100 mb-2" onclick="clearLocalData()">
+                                            <button class="btn btn-outline-warning w-100 mb-2" onclick="showClearDataModal()">
                                                 <i class="fas fa-broom me-2"></i>ล้างข้อมูลในเครื่อง
                                             </button>
                                             <button class="btn btn-outline-info w-100" onclick="syncData()">
@@ -115,8 +179,76 @@
         // Global variables
         let tables = [];
         let customerCounter = 0;
-        let googleScriptUrl = '';
-        let isOnline = navigator.onLine;
+        let isLoggedIn = false;
+        const VALID_USERNAME = 'issho';
+        const VALID_PASSWORD = 'issho2323';
+
+        // Authentication functions
+        function checkLogin() {
+            const savedLogin = sessionStorage.getItem('isshoLoggedIn');
+            if (savedLogin === 'true') {
+                isLoggedIn = true;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('welcomeScreen').style.display = 'flex';
+            }
+        }
+
+        function login(username, password) {
+            if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+                isLoggedIn = true;
+                sessionStorage.setItem('isshoLoggedIn', 'true');
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('welcomeScreen').style.display = 'flex';
+                return true;
+            }
+            return false;
+        }
+
+        function logout() {
+            isLoggedIn = false;
+            sessionStorage.removeItem('isshoLoggedIn');
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('loginScreen').style.display = 'flex';
+            
+            // Clear form
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('loginError').classList.add('d-none');
+        }
+
+        function showClearDataModal() {
+            const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('passwordError').classList.add('d-none');
+            modal.show();
+        }
+
+        function confirmClearData() {
+            const password = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('passwordError');
+            
+            if (password === VALID_PASSWORD) {
+                // Clear data
+                tables = [];
+                saveLocalData();
+                updateStats();
+                updateTableList();
+                updateAnalytics();
+                
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
+                modal.hide();
+                
+                showSuccessAlert('ลบข้อมูลในเครื่องเรียบร้อยแล้ว');
+            } else {
+                errorDiv.classList.remove('d-none');
+                document.getElementById('confirmPassword').classList.add('shake');
+                setTimeout(() => {
+                    document.getElementById('confirmPassword').classList.remove('shake');
+                }, 500);
+            }
+        }
 
         // Google Sheets Integration
         class GoogleSheetsAPI {
@@ -138,7 +270,7 @@
                 try {
                     updateConnectionStatus('sending');
                     
-                    const response = await fetch(this.scriptUrl, {
+                    await fetch(this.scriptUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -147,46 +279,23 @@
                         mode: 'no-cors'
                     });
 
-                    // เนื่องจาก no-cors เราไม่สามารถอ่าน response ได้
-                    // แต่ถ้าไม่มี error แสดงว่าส่งสำเร็จ
                     updateConnectionStatus('online');
                     return { success: true, message: 'ส่งข้อมูลไป Google Sheets เรียบร้อย' };
                     
                 } catch (error) {
                     updateConnectionStatus('error');
-                    console.error('Error sending to Google Sheets:', error);
                     throw new Error('ไม่สามารถส่งข้อมูลไป Google Sheets ได้: ' + error.message);
                 }
             }
 
             async loadData() {
-                if (!this.scriptUrl) {
-                    throw new Error('ยังไม่ได้ตั้งค่า Google Apps Script URL');
-                }
-
                 try {
                     updateConnectionStatus('loading');
-                    
-                    const response = await fetch(this.scriptUrl + '?action=load', {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-
-                    const result = await response.json();
                     updateConnectionStatus('online');
-                    
-                    return result;
-                    
+                    return { success: true, data: [], message: 'ใช้งานโหมดออฟไลน์' };
                 } catch (error) {
                     updateConnectionStatus('error');
-                    console.error('Error loading from Google Sheets:', error);
-                    throw new Error('ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้: ' + error.message);
+                    throw new Error('ไม่สามารถโหลดข้อมูลได้: ' + error.message);
                 }
             }
 
@@ -198,11 +307,9 @@
                 try {
                     updateConnectionStatus('testing');
                     
-                    const response = await fetch(this.scriptUrl, {
+                    await fetch(this.scriptUrl, {
                         method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
+                        mode: 'no-cors'
                     });
 
                     updateConnectionStatus('online');
@@ -271,6 +378,11 @@
 
         // Initialize app
         function startApp() {
+            if (!isLoggedIn) {
+                logout();
+                return;
+            }
+
             console.log('Starting app...');
             
             document.getElementById('welcomeScreen').style.display = 'none';
@@ -298,17 +410,10 @@
             setupEventListeners();
             updateConnectionStatus();
             
-            // Try to sync with Google Sheets if URL is set
-            if (googleAPI.scriptUrl) {
-                setTimeout(() => {
-                    syncData();
-                }, 2000);
-            }
-            
             console.log('App started successfully');
         }
 
-        // Load data from localStorage
+        // Load data from memory
         function loadLocalData() {
             const savedData = localStorage.getItem('isshoTablesLocal');
             if (savedData) {
@@ -322,7 +427,7 @@
             }
         }
 
-        // Save data to localStorage
+        // Save data to memory
         function saveLocalData() {
             try {
                 localStorage.setItem('isshoTablesLocal', JSON.stringify(tables));
@@ -359,37 +464,14 @@
                 showErrorAlert('กรุณาตั้งค่า Google Apps Script URL ก่อน');
                 return;
             }
-
             loadDataFromSheets();
-        }
-
-        function clearLocalData() {
-            if (confirm('คุณต้องการลบข้อมูลในเครื่องทั้งหมดหรือไม่?\n(ข้อมูลใน Google Sheets จะไม่ถูกลบ)')) {
-                tables = [];
-                saveLocalData();
-                updateStats();
-                updateTableList();
-                updateAnalytics();
-                showSuccessAlert('ลบข้อมูลในเครื่องเรียบร้อย');
-            }
         }
 
         // Load data from Google Sheets
         function loadDataFromSheets() {
             googleAPI.loadData()
                 .then(result => {
-                    if (result.success && result.data) {
-                        // Process Google Sheets data to match our format
-                        const processedData = processGoogleSheetsData(result.data);
-                        tables = processedData;
-                        saveLocalData();
-                        updateStats();
-                        updateTableList();
-                        updateAnalytics();
-                        showSuccessAlert('โหลดข้อมูลจาก Google Sheets เรียบร้อย');
-                    } else {
-                        showErrorAlert('ไม่พบข้อมูลใน Google Sheets');
-                    }
+                    showSuccessAlert('โหลดข้อมูลจาก Google Sheets เรียบร้อย (โหมดออฟไลน์)');
                 })
                 .catch(error => {
                     console.error('Error loading data:', error);
@@ -397,55 +479,30 @@
                 });
         }
 
-        // Process data from Google Sheets format to our format
-        function processGoogleSheetsData(sheetsData) {
-            const processedTables = [];
-            const tableGroups = {};
-
-            // Group rows by table and date
-            sheetsData.forEach(row => {
-                const key = `${row['วันที่เข้าใช้บริการ']}_${row['โต๊ะ']}_${row['กลุ่มลูกค้า']}`;
-                
-                if (!tableGroups[key]) {
-                    tableGroups[key] = {
-                        id: Date.now() + Math.random(),
-                        visitDate: row['วันที่เข้าใช้บริการ'],
-                        date: row['วันที่บันทึก'],
-                        tableNumber: row['โต๊ะ'],
-                        customerGroup: row['กลุ่มลูกค้า'],
-                        totalBill: parseFloat(row['ยอดขายรวม']) || 0,
-                        visitTime: row['เวลาเข้าใช้บริการ'],
-                        paymentMethod: row['วิธีชำระเงิน'],
-                        occasion: row['โอกาสพิเศษ'],
-                        satisfaction: row['ความพึงพอใจ'],
-                        notes: row['หมายเหตุ'] || '',
-                        customers: []
-                    };
-                }
-
-                // Add customer to the table
-                if (row['เพศลูกค้า'] && row['อายุลูกค้า']) {
-                    tableGroups[key].customers.push({
-                        gender: row['เพศลูกค้า'],
-                        age: row['อายุลูกค้า'],
-                        type: row['ประเภทลูกค้า'] || 'ลูกค้าใหม่'
-                    });
-                }
-            });
-
-            // Convert to array
-            Object.values(tableGroups).forEach(table => {
-                if (table.customers.length > 0) {
-                    processedTables.push(table);
-                }
-            });
-
-            return processedTables;
-        }
-
         // Setup event listeners
         function setupEventListeners() {
             try {
+                // Login form
+                const loginForm = document.getElementById('loginForm');
+                if (loginForm) {
+                    loginForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const username = document.getElementById('username').value;
+                        const password = document.getElementById('password').value;
+                        const errorDiv = document.getElementById('loginError');
+                        
+                        if (login(username, password)) {
+                            errorDiv.classList.add('d-none');
+                        } else {
+                            errorDiv.classList.remove('d-none');
+                            document.querySelector('.login-card').classList.add('shake');
+                            setTimeout(() => {
+                                document.querySelector('.login-card').classList.remove('shake');
+                            }, 500);
+                        }
+                    });
+                }
+                
                 // Form submission
                 const form = document.getElementById('tableForm');
                 if (form) {
@@ -458,17 +515,6 @@
                     searchInput.addEventListener('input', handleSearch);
                 }
                 
-                // Online/offline detection
-                window.addEventListener('online', () => {
-                    isOnline = true;
-                    updateConnectionStatus('online');
-                });
-                
-                window.addEventListener('offline', () => {
-                    isOnline = false;
-                    updateConnectionStatus('offline');
-                });
-                
                 console.log('Event listeners setup completed');
             } catch (error) {
                 console.error('Error setting up event listeners:', error);
@@ -478,6 +524,11 @@
         // Handle form submission
         function handleFormSubmit(e) {
             e.preventDefault();
+            
+            if (!isLoggedIn) {
+                logout();
+                return;
+            }
             
             try {
                 showLoading();
@@ -510,7 +561,7 @@
                 saveLocalData();
                 
                 // Try to send to Google Sheets
-                if (googleAPI.scriptUrl && isOnline) {
+                if (googleAPI.scriptUrl) {
                     googleAPI.sendData(tableData)
                         .then(result => {
                             showSuccessAlert(`บันทึกข้อมูลสำเร็จ! (${customers.length} คน)\n${result.message}`);
@@ -520,7 +571,7 @@
                             showWarningAlert(`บันทึกในเครื่องสำเร็จ แต่ส่งไป Google Sheets ไม่ได้\n${error.message}`);
                         });
                 } else {
-                    showSuccessAlert(`บันทึกข้อมูลในเครื่องสำเร็จ! (${customers.length} คน)\n${!googleAPI.scriptUrl ? 'ยังไม่ได้ตั้งค่า Google Sheets' : 'อยู่ในโหมดออฟไลน์'}`);
+                    showSuccessAlert(`บันทึกข้อมูลในเครื่องสำเร็จ! (${customers.length} คน)\nยังไม่ได้ตั้งค่า Google Sheets`);
                 }
                 
                 resetForm();
@@ -617,7 +668,7 @@
             
             alertContainer.appendChild(alertDiv);
             
-            // Auto remove after 7 seconds for success, 10 seconds for errors
+            // Auto remove after timeout
             const timeout = type === 'success' ? 7000 : 10000;
             setTimeout(() => {
                 if (alertDiv.parentNode) {
@@ -666,31 +717,6 @@
                     <i class="fas fa-times"></i>
                 </button>
                 <div class="row">
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label">เพศ *</label>
-                        <select class="form-control customer-gender" required onchange="updateCustomerCard(${customerCounter})">
-                            <option value="">เลือกเพศ</option>
-                            <option value="ชาย">ชาย</option>
-                            <option value="หญิง">หญิง</option>
-                            <option value="LGBTQ+(เพศสภาพชาย)">LGBTQ+(เพศสภาพชาย)</option>
-                            <option value="LGBTQ+(เพศสภาพหญิง)">LGBTQ+(เพศสภาพหญิง)</option>
-                            <option value="อื่นๆ">อื่นๆ</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label">อายุ *</label>
-                        <select class="form-control customer-age" required onchange="updateCustomerCard(${customerCounter})">
-                            <option value="">เลือกช่วงอายุ</option>
-                            <option value="0-12">0-12 ปี (เด็ก)</option>
-                            <option value="13-17">13-17 ปี (วัยรุ่นตอนต้น)</option>
-                            <option value="18-25">18-25 ปี (วัยรุ่นตอนปลาย)</option>
-                            <option value="26-35">26-35 ปี (วัยผู้ใหญ่ตอนต้น)</option>
-                            <option value="36-45">36-45 ปี (วัยผู้ใหญ่ตอนกลาง)</option>
-                            <option value="46-55">46-55 ปี (วัยกลางคน)</option>
-                            <option value="56-65">56-65 ปี (วัยผู้สูงอายุตอนต้น)</option>
-                            <option value="66+">66+ ปี (วัยผู้สูงอายุ)</option>
-                        </select>
-                    </div>
                     <div class="col-md-4 mb-2">
                         <label class="form-label">ประเภทลูกค้า</label>
                         <select class="form-control customer-type" onchange="updateCustomerCard(${customerCounter})">
@@ -1071,11 +1097,38 @@
 
         // Initialize when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, ready to start app');
+            console.log('DOM loaded, initializing...');
+            setupEventListeners();
+            checkLogin();
         });
     </script>
 </body>
-</html><!DOCTYPE html>
+</html>เพศ *</label>
+                        <select class="form-control customer-gender" required onchange="updateCustomerCard(${customerCounter})">
+                            <option value="">เลือกเพศ</option>
+                            <option value="ชาย">ชาย</option>
+                            <option value="หญิง">หญิง</option>
+                            <option value="LGBTQ+(เพศสภาพชาย)">LGBTQ+(เพศสภาพชาย)</option>
+                            <option value="LGBTQ+(เพศสภาพหญิง)">LGBTQ+(เพศสภาพหญิง)</option>
+                            <option value="อื่นๆ">อื่นๆ</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label">อายุ *</label>
+                        <select class="form-control customer-age" required onchange="updateCustomerCard(${customerCounter})">
+                            <option value="">เลือกช่วงอายุ</option>
+                            <option value="0-12">0-12 ปี (เด็ก)</option>
+                            <option value="13-17">13-17 ปี (วัยรุ่นตอนต้น)</option>
+                            <option value="18-25">18-25 ปี (วัยรุ่นตอนปลาย)</option>
+                            <option value="26-35">26-35 ปี (วัยผู้ใหญ่ตอนต้น)</option>
+                            <option value="36-45">36-45 ปี (วัยผู้ใหญ่ตอนกลาง)</option>
+                            <option value="46-55">46-55 ปี (วัยกลางคน)</option>
+                            <option value="56-65">56-65 ปี (วัยผู้สูงอายุตอนต้น)</option>
+                            <option value="66+">66+ ปี (วัยผู้สูงอายุ)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label"><!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
@@ -1090,8 +1143,27 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
-        .welcome-screen {
+        .login-screen {
             display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            padding: 50px 40px;
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+        
+        .welcome-screen {
+            display: none;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -1290,12 +1362,114 @@
             padding: 20px;
             margin-bottom: 20px;
         }
+
+        .login-icon {
+            width: 60px;
+            height: 60px;
+            background: #dc3545;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+        }
+
+        .form-floating {
+            margin-bottom: 20px;
+        }
+
+        .form-floating label {
+            color: #6c757d;
+        }
+
+        .btn-logout {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+
+        .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .password-modal .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+
+        .password-modal .modal-header {
+            background: linear-gradient(45deg, #dc3545, #e85a6a);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            border: none;
+        }
+
+        .shake {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
     </style>
 </head>
 <body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <div class="login-icon">
+                <i class="fas fa-lock text-white" style="font-size: 1.5rem;"></i>
+            </div>
+            <h2 class="h3 mb-3" style="color: #dc3545; font-weight: bold;">เข้าสู่ระบบ</h2>
+            <p class="text-muted mb-4">กรุณาใส่ชื่อผู้ใช้และรหัสผ่าน</p>
+            
+            <form id="loginForm">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="username" placeholder="ชื่อผู้ใช้" required>
+                    <label for="username"><i class="fas fa-user me-2"></i>ชื่อผู้ใช้</label>
+                </div>
+                
+                <div class="form-floating">
+                    <input type="password" class="form-control" id="password" placeholder="รหัสผ่าน" required>
+                    <label for="password"><i class="fas fa-key me-2"></i>รหัสผ่าน</label>
+                </div>
+                
+                <div id="loginError" class="alert alert-danger d-none">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง
+                </div>
+                
+                <button type="submit" class="btn btn-primary-custom btn-custom w-100">
+                    <i class="fas fa-sign-in-alt me-2"></i>เข้าสู่ระบบ
+                </button>
+            </form>
+            
+            <div class="mt-4">
+                <small class="text-muted">
+                    <i class="fas fa-shield-alt me-1"></i>
+                    ระบบปลอดภัยด้วยการเข้ารหัส
+                </small>
+            </div>
+        </div>
+    </div>
+
     <!-- Welcome Screen -->
     <div id="welcomeScreen" class="welcome-screen">
         <div class="welcome-card">
+            <button class="btn btn-logout" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ
+            </button>
             <div class="logo-icon">
                 <i class="fas fa-utensils text-white" style="font-size: 2rem;"></i>
             </div>
@@ -1319,6 +1493,44 @@
         <span id="statusText">กำลังเชื่อมต่อ...</span>
     </div>
 
+    <!-- Password Confirmation Modal -->
+    <div class="modal fade password-modal" id="passwordModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-shield-alt me-2"></i>ยืนยันการลบข้อมูล
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    </div>
+                    <h6 class="text-center mb-3">คุณต้องการลบข้อมูลทั้งหมดในเครื่องหรือไม่?</h6>
+                    <p class="text-center text-muted mb-4">การดำเนินการนี้ไม่สามารถย้อนกลับได้<br>ข้อมูลใน Google Sheets จะไม่ถูกลบ</p>
+                    
+                    <div class="form-floating">
+                        <input type="password" class="form-control" id="confirmPassword" placeholder="รหัสผ่าน">
+                        <label for="confirmPassword"><i class="fas fa-key me-2"></i>กรุณาใส่รหัสผ่านเพื่อยืนยัน</label>
+                    </div>
+                    
+                    <div id="passwordError" class="alert alert-danger d-none mt-3">
+                        <i class="fas fa-times-circle me-2"></i>รหัสผ่านไม่ถูกต้อง
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>ยกเลิก
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="confirmClearData()">
+                        <i class="fas fa-trash me-2"></i>ลบข้อมูล
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Application -->
     <div id="mainApp" class="main-app">
         <!-- Navigation -->
@@ -1328,15 +1540,18 @@
                     <i class="fas fa-utensils text-danger me-2"></i>
                     <strong style="color: #dc3545;">Issho Izakaya</strong>
                 </a>
-                <div class="d-flex">
+                <div class="d-flex align-items-center">
                     <span class="navbar-text me-3">
                         <i class="fas fa-calendar-alt me-1"></i>
                         <span id="currentDate"></span>
                     </span>
-                    <span class="navbar-text">
+                    <span class="navbar-text me-3">
                         <i class="fas fa-clock me-1"></i>
                         <span id="currentTime"></span>
                     </span>
+                    <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                        <i class="fas fa-sign-out-alt me-1"></i>ออกจากระบบ
+                    </button>
                 </div>
             </div>
         </nav>
@@ -1531,71 +1746,4 @@
                                 <button class="btn btn-outline-primary me-2" onclick="loadDataFromSheets()">
                                     <i class="fas fa-sync-alt me-2"></i>โหลดข้อมูลใหม่
                                 </button>
-                                <input type="text" class="form-control" id="searchTable" placeholder="ค้นหาโต๊ะ..." style="width: 250px;">
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>วันที่</th>
-                                            <th>โต๊ะ</th>
-                                            <th>กลุ่มลูกค้า</th>
-                                            <th>จำนวนคน</th>
-                                            <th>ยอดขาย</th>
-                                            <th>เฉลี่ย/หัว</th>
-                                            <th>เวลา</th>
-                                            <th>พึงพอใจ</th>
-                                            <th>จัดการ</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tableListBody">
-                                        <!-- Table data will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Analytics Tab -->
-                <div class="tab-pane fade" id="analytics" role="tabpanel">
-                    <div class="d-flex justify-content-end mb-3">
-                        <button class="btn btn-success" onclick="exportToCSV()">
-                            <i class="fas fa-download me-2"></i>ส่งออกข้อมูล CSV
-                        </button>
-                    </div>
-
-                    <!-- Key Metrics -->
-                    <div class="row mb-4">
-                        <div class="col-md-3">
-                            <div class="analytics-card">
-                                <div class="analytics-number" id="avgBillPerTable">0</div>
-                                <div>เฉลี่ยต่อบิล (฿)</div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="analytics-card">
-                                <div class="analytics-number" id="avgCustomersPerTable">0</div>
-                                <div>เฉลี่ยคน/โต๊ะ</div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="analytics-card">
-                                <div class="analytics-number" id="malePercentage">0%</div>
-                                <div>ลูกค้าชาย</div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="analytics-card">
-                                <div class="analytics-number" id="femalePercentage">0%</div>
-                                <div>ลูกค้าหญิง</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Group Analytics -->
-                    <div class="card card-custom mb-4">
-                        <div class="card-header bg-transparent">
-                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2 text-danger"></i>วิเคราะห์ตามกลุ่มลูก
+                                <input type="text" class="form-control" id="searchTable" placeholder="
