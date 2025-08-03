@@ -1,4 +1,706 @@
-<input type="text" class="form-control" id="searchTable" placeholder="ค้นหาโต๊ะ..." style="width: 250px;">
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issho Izakaya - ระบบบันทึกข้อมูลลูกค้า (Google Sheets)</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            padding: 50px 40px;
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+        
+        .welcome-screen {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .welcome-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 60px 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .logo-icon {
+            width: 80px;
+            height: 80px;
+            background: #dc3545;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
+        }
+        
+        .main-app {
+            display: none;
+            padding: 20px 0;
+        }
+        
+        .navbar-custom {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-custom {
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        
+        .btn-custom {
+            border-radius: 10px;
+            padding: 12px 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-custom {
+            background: linear-gradient(45deg, #dc3545, #e85a6a);
+            border: none;
+            color: white;
+        }
+        
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
+            color: white;
+        }
+        
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+        }
+        
+        .form-control:focus {
+            border-color: #dc3545;
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+        }
+        
+        .stats-card {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .customer-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #dee2e6;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .customer-card.filled {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border-color: #dc3545;
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.2);
+        }
+        
+        .customer-card-header {
+            background: linear-gradient(45deg, #dc3545, #e85a6a);
+            color: white;
+            border-radius: 10px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .customer-number {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .remove-customer {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .remove-customer:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .form-section {
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .section-header {
+            color: #dc3545;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #dc3545;
+        }
+        
+        .table-responsive {
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        .table th {
+            background: #f8f9fa;
+            border: none;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            border-radius: 10px 10px 0 0;
+            color: #6c757d;
+            font-weight: 600;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .analytics-card {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .analytics-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .alert-custom {
+            border-radius: 10px;
+            border: none;
+            font-weight: 500;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .status-online {
+            background: #28a745;
+            color: white;
+        }
+
+        .status-offline {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .status-error {
+            background: #dc3545;
+            color: white;
+        }
+
+        .settings-card {
+            background: linear-gradient(45deg, #17a2b8, #138496);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .login-icon {
+            width: 60px;
+            height: 60px;
+            background: #dc3545;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+        }
+
+        .form-floating {
+            margin-bottom: 20px;
+        }
+
+        .form-floating label {
+            color: #6c757d;
+        }
+
+        .btn-logout {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+
+        .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .password-modal .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+
+        .password-modal .modal-header {
+            background: linear-gradient(45deg, #dc3545, #e85a6a);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            border: none;
+        }
+
+        .shake {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* แก้ไข Container ให้อยู่กลาง */
+        .container-center {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .form-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* ปรับแต่งการจัดวาง */
+        .customer-form-row {
+            display: flex;
+            gap: 15px;
+            align-items: end;
+        }
+
+        .customer-form-row > div {
+            flex: 1;
+        }
+
+        @media (max-width: 768px) {
+            .customer-form-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <div class="login-icon">
+                <i class="fas fa-lock text-white" style="font-size: 1.5rem;"></i>
+            </div>
+            <h2 class="h3 mb-3" style="color: #dc3545; font-weight: bold;">เข้าสู่ระบบ</h2>
+            <p class="text-muted mb-4">กรุณาใส่ชื่อผู้ใช้และรหัสผ่าน</p>
+            
+            <form id="loginForm">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="username" placeholder="ชื่อผู้ใช้" required>
+                    <label for="username"><i class="fas fa-user me-2"></i>ชื่อผู้ใช้</label>
+                </div>
+                
+                <div class="form-floating">
+                    <input type="password" class="form-control" id="password" placeholder="รหัสผ่าน" required>
+                    <label for="password"><i class="fas fa-key me-2"></i>รหัสผ่าน</label>
+                </div>
+                
+                <div id="loginError" class="alert alert-danger d-none">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง
+                </div>
+                
+                <button type="submit" class="btn btn-primary-custom btn-custom w-100">
+                    <i class="fas fa-sign-in-alt me-2"></i>เข้าสู่ระบบ
+                </button>
+            </form>
+            
+            <div class="mt-4">
+                <small class="text-muted">
+                    <i class="fas fa-shield-alt me-1"></i>
+                    ระบบปลอดภัยด้วยการเข้ารหัส
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="welcome-screen">
+        <div class="welcome-card">
+            <button class="btn btn-logout" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ
+            </button>
+            <div class="logo-icon">
+                <i class="fas fa-utensils text-white" style="font-size: 2rem;"></i>
+            </div>
+            <h1 class="h2 mb-3" style="color: #dc3545; font-weight: bold;">Issho Izakaya</h1>
+            <p class="text-muted mb-4">ระบบบันทึกข้อมูลลูกค้าแบบโต๊ะ<br>เชื่อมต่อกับ Google Sheets</p>
+            <button class="btn btn-primary-custom btn-custom" onclick="startApp()">
+                <i class="fas fa-play me-2"></i>เริ่มใช้งาน
+            </button>
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="fas fa-cloud me-1"></i>
+                    ข้อมูลจะถูกบันทึกใน Google Sheets
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status status-offline" style="display: none;">
+        <i class="fas fa-wifi me-2"></i>
+        <span id="statusText">กำลังเชื่อมต่อ...</span>
+    </div>
+
+    <!-- Password Confirmation Modal -->
+    <div class="modal fade password-modal" id="passwordModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-shield-alt me-2"></i>ยืนยันการลบข้อมูล
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    </div>
+                    <h6 class="text-center mb-3">คุณต้องการลบข้อมูลทั้งหมดในเครื่องหรือไม่?</h6>
+                    <p class="text-center text-muted mb-4">การดำเนินการนี้ไม่สามารถย้อนกลับได้<br>ข้อมูลใน Google Sheets จะไม่ถูกลบ</p>
+                    
+                    <div class="form-floating">
+                        <input type="password" class="form-control" id="confirmPassword" placeholder="รหัสผ่าน">
+                        <label for="confirmPassword"><i class="fas fa-key me-2"></i>กรุณาใส่รหัสผ่านเพื่อยืนยัน</label>
+                    </div>
+                    
+                    <div id="passwordError" class="alert alert-danger d-none mt-3">
+                        <i class="fas fa-times-circle me-2"></i>รหัสผ่านไม่ถูกต้อง
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>ยกเลิก
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="confirmClearData()">
+                        <i class="fas fa-trash me-2"></i>ลบข้อมูล
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-light navbar-custom fixed-top">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <i class="fas fa-utensils text-danger me-2"></i>
+                    <strong style="color: #dc3545;">Issho Izakaya</strong>
+                </a>
+                <div class="d-flex align-items-center">
+                    <span class="navbar-text me-3">
+                        <i class="fas fa-calendar-alt me-1"></i>
+                        <span id="currentDate"></span>
+                    </span>
+                    <span class="navbar-text me-3">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="currentTime"></span>
+                    </span>
+                    <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                        <i class="fas fa-sign-out-alt me-1"></i>ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-center" style="margin-top: 100px;">
+            <!-- Alert Container -->
+            <div id="alertContainer"></div>
+
+            <!-- Stats Dashboard -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <div class="stats-number" id="totalTables">0</div>
+                        <div>โต๊ะทั้งหมด</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <div class="stats-number" id="totalCustomers">0</div>
+                        <div>ลูกค้าทั้งหมด</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <div class="stats-number" id="totalRevenue">0</div>
+                        <div>ยอดขายรวม (฿)</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <div class="stats-number" id="avgPerHead">0</div>
+                        <div>เฉลี่ยต่อหัว (฿)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="add-table-tab" data-bs-toggle="tab" data-bs-target="#add-table" type="button" role="tab">
+                        <i class="fas fa-plus me-2"></i>บันทึกโต๊ะใหม่
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="table-list-tab" data-bs-toggle="tab" data-bs-target="#table-list" type="button" role="tab">
+                        <i class="fas fa-list me-2"></i>รายการโต๊ะ
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button" role="tab">
+                        <i class="fas fa-chart-bar me-2"></i>วิเคราะห์ข้อมูล
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
+                        <i class="fas fa-cog me-2"></i>ตั้งค่า
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="mainTabContent">
+                <!-- Add Table Tab -->
+                <div class="tab-pane fade show active" id="add-table" role="tabpanel">
+                    <div class="form-container">
+                        <div class="card card-custom">
+                            <div class="card-header bg-transparent">
+                                <h5 class="mb-0 text-center"><i class="fas fa-plus me-2 text-danger"></i>บันทึกข้อมูลโต๊ะใหม่</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="tableForm">
+                                    <!-- ข้อมูลโต๊ะ -->
+                                    <div class="form-section">
+                                        <h6 class="section-header"><i class="fas fa-table me-2"></i>ข้อมูลโต๊ะ</h6>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">วันที่เข้าใช้บริการ *</label>
+                                                <input type="date" class="form-control" id="visitDate" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">หมายเลขโต๊ะ</label>
+                                                <input type="text" class="form-control" id="tableNumber" placeholder="เช่น T01, A5">
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">กลุ่มลูกค้า *</label>
+                                                <select class="form-control" id="customerGroup" required>
+                                                    <option value="">เลือกกลุ่ม</option>
+                                                    <option value="คนเดียว">คนเดียว</option>
+                                                    <option value="คู่รัก">คู่รัก</option>
+                                                    <option value="กลุ่มเพื่อน">กลุ่มเพื่อน</option>
+                                                    <option value="ครอบครัว">ครอบครัว</option>
+                                                    <option value="องค์กร/บริษัท">องค์กร/บริษัท</option>
+                                                    <option value="นักท่องเที่ยว">นักท่องเที่ยว</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">ยอดขายรวม (฿) *</label>
+                                                <input type="number" class="form-control" id="totalBill" min="0" step="0.01" required>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- รายละเอียดเพิ่มเติม -->
+                                    <div class="form-section">
+                                        <h6 class="section-header"><i class="fas fa-info-circle me-2"></i>รายละเอียดเพิ่มเติม</h6>
+                                        <div class="row">
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">เวลาเข้าใช้บริการ *</label>
+                                                <select class="form-control" id="visitTime" required>
+                                                    <option value="">เลือกช่วงเวลา</option>
+                                                    <option value="11:00-12:00">11:00-12:00 น.</option>
+                                                    <option value="12:00-13:00">12:00-13:00 น.</option>
+                                                    <option value="13:00-14:00">13:00-14:00 น.</option>
+                                                    <option value="14:00-15:00">14:00-15:00 น.</option>
+                                                    <option value="15:00-16:00">15:00-16:00 น.</option>
+                                                    <option value="16:00-17:00">16:00-17:00 น.</option>
+                                                    <option value="17:00-18:00">17:00-18:00 น.</option>
+                                                    <option value="18:00-19:00">18:00-19:00 น.</option>
+                                                    <option value="19:00-20:00">19:00-20:00 น.</option>
+                                                    <option value="20:00-21:00">20:00-21:00 น.</option>
+                                                    <option value="21:00-22:00">21:00-22:00 น.</option>
+                                                    <option value="22:00-23:00">22:00-23:00 น.</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">วิธีการชำระเงิน</label>
+                                                <select class="form-control" id="paymentMethod">
+                                                    <option value="เงินสด">เงินสด</option>
+                                                    <option value="บัตรเครดิต">บัตรเครดิต</option>
+                                                    <option value="QR Code">QR Code</option>
+                                                    <option value="โอนเงิน">โอนเงิน</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label class="form-label">โอกาสพิเศษ</label>
+                                                <select class="form-control" id="occasion">
+                                                    <option value="">เลือกโอกาสพิเศษ</option>
+                                                    <option value="วันเกิด">วันเกิด</option>
+                                                    <option value="ครบรอบ">ครบรอบ</option>
+                                                    <option value="ปาร์ตี้">ปาร์ตี้</option>
+                                                    <option value="ประชุมงาน">ประชุมงาน</option>
+                                                    <option value="วันหยุด">วันหยุด</option>
+                                                    <option value="ทานมื้อเย็น">ทานมื้อเย็น</option>
+                                                    <option value="นั่งชิล">นั่งชิล</option>
+                                                    <option value="อื่นๆ">อื่นๆ</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- รายละเอียดลูกค้าในโต๊ะ -->
+                                    <div class="form-section">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 class="section-header mb-0"><i class="fas fa-users me-2"></i>รายละเอียดลูกค้าในโต๊ะ</h6>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addCustomer()">
+                                                <i class="fas fa-plus me-1"></i>เพิ่มลูกค้า
+                                            </button>
+                                        </div>
+
+                                        <div id="customersContainer">
+                                            <!-- Customer cards will be added here -->
+                                        </div>
+                                    </div>
+
+                                    <!-- ความพึงพอใจและหมายเหตุ -->
+                                    <div class="form-section">
+                                        <h6 class="section-header"><i class="fas fa-star me-2"></i>ความพึงพอใจและหมายเหตุ</h6>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">ระดับความพึงพอใจ</label>
+                                                <select class="form-control" id="satisfaction">
+                                                    <option value="">เลือกระดับ</option>
+                                                    <option value="5">★★★★★ ดีเยี่ยม</option>
+                                                    <option value="4">★★★★☆ ดี</option>
+                                                    <option value="3">★★★☆☆ ปานกลาง</option>
+                                                    <option value="2">★★☆☆☆ พอใช้</option>
+                                                    <option value="1">★☆☆☆☆ ต้องปรับปรุง</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">หมายเหตุเพิ่มเติม</label>
+                                                <textarea class="form-control" id="notes" rows="3" placeholder="ข้อมูลเพิ่มเติม, ปัญหาที่พบ, ข้อเรียกร้องพิเศษ, คำแนะนำจากลูกค้า"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="text-center">
+                                        <button type="button" class="btn btn-secondary me-3" onclick="resetForm()">
+                                            <i class="fas fa-undo me-2"></i>ล้างข้อมูล
+                                        </button>
+                                        <button type="submit" class="btn btn-primary-custom" id="submitBtn">
+                                            <i class="fas fa-save me-2"></i>บันทึกข้อมูล
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table List Tab -->
+                <div class="tab-pane fade" id="table-list" role="tabpanel">
+                    <div class="card card-custom">
+                        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="fas fa-list me-2 text-danger"></i>รายการโต๊ะ</h5>
+                            <div class="d-flex">
+                                <button class="btn btn-outline-primary me-2" onclick="loadDataFromSheets()">
+                                    <i class="fas fa-sync-alt me-2"></i>โหลดข้อมูลใหม่
+                                </button>
+                                <input type="text" class="form-control" id="searchTable" placeholder="ค้นหาโต๊ะ..." style="width: 250px;">
                             </div>
                         </div>
                         <div class="card-body">
@@ -702,7 +1404,7 @@
             }
         }
 
-        // Add customer to table
+        // Add customer to table (แก้ไขให้มีข้อมูลเพศและอายุ)
         function addCustomer() {
             customerCounter++;
             const container = document.getElementById('customersContainer');
@@ -713,11 +1415,41 @@
             customerCard.id = `customer-${customerCounter}`;
             
             customerCard.innerHTML = `
-                <button type="button" class="remove-customer" onclick="removeCustomer(${customerCounter})" style="display: none;">
-                    <i class="fas fa-times"></i>
-                </button>
-                <div class="row">
-                    <div class="col-md-4 mb-2">
+                <div class="customer-card-header">
+                    <div class="customer-number">
+                        <i class="fas fa-user me-2"></i>ลูกค้าคนที่ ${customerCounter}
+                    </div>
+                    <button type="button" class="remove-customer" onclick="removeCustomer(${customerCounter})" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="customer-form-row">
+                    <div>
+                        <label class="form-label">เพศ *</label>
+                        <select class="form-control customer-gender" required onchange="updateCustomerCard(${customerCounter})">
+                            <option value="">เลือกเพศ</option>
+                            <option value="ชาย">ชาย</option>
+                            <option value="หญิง">หญิง</option>
+                            <option value="LGBTQ+(เพศสภาพชาย)">LGBTQ+(เพศสภาพชาย)</option>
+                            <option value="LGBTQ+(เพศสภาพหญิง)">LGBTQ+(เพศสภาพหญิง)</option>
+                            <option value="อื่นๆ">อื่นๆ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">อายุ *</label>
+                        <select class="form-control customer-age" required onchange="updateCustomerCard(${customerCounter})">
+                            <option value="">เลือกช่วงอายุ</option>
+                            <option value="0-12">0-12 ปี (เด็ก)</option>
+                            <option value="13-17">13-17 ปี (วัยรุ่นตอนต้น)</option>
+                            <option value="18-25">18-25 ปี (วัยรุ่นตอนปลาย)</option>
+                            <option value="26-35">26-35 ปี (วัยผู้ใหญ่ตอนต้น)</option>
+                            <option value="36-45">36-45 ปี (วัยผู้ใหญ่ตอนกลาง)</option>
+                            <option value="46-55">46-55 ปี (วัยกลางคน)</option>
+                            <option value="56-65">56-65 ปี (วัยผู้สูงอายุตอนต้น)</option>
+                            <option value="66+">66+ ปี (วัยผู้สูงอายุ)</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="form-label">ประเภทลูกค้า</label>
                         <select class="form-control customer-type" onchange="updateCustomerCard(${customerCounter})">
                             <option value="ลูกค้าใหม่">ลูกค้าใหม่</option>
@@ -738,7 +1470,19 @@
             if (customerCard) {
                 customerCard.remove();
                 updateRemoveButtons();
+                renumberCustomers();
             }
+        }
+
+        // Renumber customers after removal
+        function renumberCustomers() {
+            const customerCards = document.querySelectorAll('.customer-card');
+            customerCards.forEach((card, index) => {
+                const header = card.querySelector('.customer-number');
+                if (header) {
+                    header.innerHTML = `<i class="fas fa-user me-2"></i>ลูกค้าคนที่ ${index + 1}`;
+                }
+            });
         }
 
         // Update customer card styling
@@ -781,6 +1525,10 @@
             
             customerCounter = 0;
             addCustomer();
+
+            // Set today's date as default
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('visitDate').value = today;
         }
 
         // Update stats
@@ -1103,647 +1851,4 @@
         });
     </script>
 </body>
-</html>เพศ *</label>
-                        <select class="form-control customer-gender" required onchange="updateCustomerCard(${customerCounter})">
-                            <option value="">เลือกเพศ</option>
-                            <option value="ชาย">ชาย</option>
-                            <option value="หญิง">หญิง</option>
-                            <option value="LGBTQ+(เพศสภาพชาย)">LGBTQ+(เพศสภาพชาย)</option>
-                            <option value="LGBTQ+(เพศสภาพหญิง)">LGBTQ+(เพศสภาพหญิง)</option>
-                            <option value="อื่นๆ">อื่นๆ</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label">อายุ *</label>
-                        <select class="form-control customer-age" required onchange="updateCustomerCard(${customerCounter})">
-                            <option value="">เลือกช่วงอายุ</option>
-                            <option value="0-12">0-12 ปี (เด็ก)</option>
-                            <option value="13-17">13-17 ปี (วัยรุ่นตอนต้น)</option>
-                            <option value="18-25">18-25 ปี (วัยรุ่นตอนปลาย)</option>
-                            <option value="26-35">26-35 ปี (วัยผู้ใหญ่ตอนต้น)</option>
-                            <option value="36-45">36-45 ปี (วัยผู้ใหญ่ตอนกลาง)</option>
-                            <option value="46-55">46-55 ปี (วัยกลางคน)</option>
-                            <option value="56-65">56-65 ปี (วัยผู้สูงอายุตอนต้น)</option>
-                            <option value="66+">66+ ปี (วัยผู้สูงอายุ)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label"><!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Issho Izakaya - ระบบบันทึกข้อมูลลูกค้า (Google Sheets)</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        .login-screen {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .login-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            padding: 50px 40px;
-            text-align: center;
-            max-width: 450px;
-            width: 100%;
-            backdrop-filter: blur(10px);
-        }
-        
-        .welcome-screen {
-            display: none;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .welcome-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 60px 40px;
-            text-align: center;
-            max-width: 500px;
-            width: 100%;
-        }
-        
-        .logo-icon {
-            width: 80px;
-            height: 80px;
-            background: #dc3545;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 30px;
-            box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
-        }
-        
-        .main-app {
-            display: none;
-            padding: 20px 0;
-        }
-        
-        .navbar-custom {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
-        }
-        
-        .card-custom {
-            background: rgba(255, 255, 255, 0.95);
-            border: none;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
-        }
-        
-        .btn-custom {
-            border-radius: 10px;
-            padding: 12px 30px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-primary-custom {
-            background: linear-gradient(45deg, #dc3545, #e85a6a);
-            border: none;
-            color: white;
-        }
-        
-        .btn-primary-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
-            color: white;
-        }
-        
-        .form-control {
-            border-radius: 10px;
-            border: 2px solid #e9ecef;
-            padding: 12px 15px;
-        }
-        
-        .form-control:focus {
-            border-color: #dc3545;
-            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
-        }
-        
-        .stats-card {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-        
-        .stats-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .customer-card {
-            background: #f8f9fa;
-            border: 2px dashed #dee2e6;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            position: relative;
-        }
-        
-        .customer-card.filled {
-            background: linear-gradient(45deg, #e3f2fd, #f3e5f5);
-            border-color: #dc3545;
-        }
-        
-        .remove-customer {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .table-responsive {
-            border-radius: 15px;
-            overflow: hidden;
-        }
-        
-        .table th {
-            background: #f8f9fa;
-            border: none;
-            font-weight: 600;
-            color: #495057;
-        }
-        
-        .nav-tabs .nav-link {
-            border: none;
-            border-radius: 10px 10px 0 0;
-            color: #6c757d;
-            font-weight: 600;
-        }
-        
-        .nav-tabs .nav-link.active {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .analytics-card {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            color: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        .analytics-number {
-            font-size: 1.8rem;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .alert-custom {
-            border-radius: 10px;
-            border: none;
-            font-weight: 500;
-        }
-
-        .connection-status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1050;
-            padding: 10px 15px;
-            border-radius: 10px;
-            font-weight: 500;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .status-online {
-            background: #28a745;
-            color: white;
-        }
-
-        .status-offline {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .status-error {
-            background: #dc3545;
-            color: white;
-        }
-
-        .settings-card {
-            background: linear-gradient(45deg, #17a2b8, #138496);
-            color: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .login-icon {
-            width: 60px;
-            height: 60px;
-            background: #dc3545;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
-        }
-
-        .form-floating {
-            margin-bottom: 20px;
-        }
-
-        .form-floating label {
-            color: #6c757d;
-        }
-
-        .btn-logout {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            border-radius: 8px;
-            padding: 8px 15px;
-            font-size: 0.9rem;
-        }
-
-        .btn-logout:hover {
-            background: rgba(255, 255, 255, 0.3);
-            color: white;
-        }
-
-        .password-modal .modal-content {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-        }
-
-        .password-modal .modal-header {
-            background: linear-gradient(45deg, #dc3545, #e85a6a);
-            color: white;
-            border-radius: 15px 15px 0 0;
-            border: none;
-        }
-
-        .shake {
-            animation: shake 0.5s ease-in-out;
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-    </style>
-</head>
-<body>
-    <!-- Login Screen -->
-    <div id="loginScreen" class="login-screen">
-        <div class="login-card">
-            <div class="login-icon">
-                <i class="fas fa-lock text-white" style="font-size: 1.5rem;"></i>
-            </div>
-            <h2 class="h3 mb-3" style="color: #dc3545; font-weight: bold;">เข้าสู่ระบบ</h2>
-            <p class="text-muted mb-4">กรุณาใส่ชื่อผู้ใช้และรหัสผ่าน</p>
-            
-            <form id="loginForm">
-                <div class="form-floating">
-                    <input type="text" class="form-control" id="username" placeholder="ชื่อผู้ใช้" required>
-                    <label for="username"><i class="fas fa-user me-2"></i>ชื่อผู้ใช้</label>
-                </div>
-                
-                <div class="form-floating">
-                    <input type="password" class="form-control" id="password" placeholder="รหัสผ่าน" required>
-                    <label for="password"><i class="fas fa-key me-2"></i>รหัสผ่าน</label>
-                </div>
-                
-                <div id="loginError" class="alert alert-danger d-none">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง
-                </div>
-                
-                <button type="submit" class="btn btn-primary-custom btn-custom w-100">
-                    <i class="fas fa-sign-in-alt me-2"></i>เข้าสู่ระบบ
-                </button>
-            </form>
-            
-            <div class="mt-4">
-                <small class="text-muted">
-                    <i class="fas fa-shield-alt me-1"></i>
-                    ระบบปลอดภัยด้วยการเข้ารหัส
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <!-- Welcome Screen -->
-    <div id="welcomeScreen" class="welcome-screen">
-        <div class="welcome-card">
-            <button class="btn btn-logout" onclick="logout()">
-                <i class="fas fa-sign-out-alt me-2"></i>ออกจากระบบ
-            </button>
-            <div class="logo-icon">
-                <i class="fas fa-utensils text-white" style="font-size: 2rem;"></i>
-            </div>
-            <h1 class="h2 mb-3" style="color: #dc3545; font-weight: bold;">Issho Izakaya</h1>
-            <p class="text-muted mb-4">ระบบบันทึกข้อมูลลูกค้าแบบโต๊ะ<br>เชื่อมต่อกับ Google Sheets</p>
-            <button class="btn btn-primary-custom btn-custom" onclick="startApp()">
-                <i class="fas fa-play me-2"></i>เริ่มใช้งาน
-            </button>
-            <div class="mt-3">
-                <small class="text-muted">
-                    <i class="fas fa-cloud me-1"></i>
-                    ข้อมูลจะถูกบันทึกใน Google Sheets
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <!-- Connection Status -->
-    <div id="connectionStatus" class="connection-status status-offline" style="display: none;">
-        <i class="fas fa-wifi me-2"></i>
-        <span id="statusText">กำลังเชื่อมต่อ...</span>
-    </div>
-
-    <!-- Password Confirmation Modal -->
-    <div class="modal fade password-modal" id="passwordModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-shield-alt me-2"></i>ยืนยันการลบข้อมูล
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="text-center mb-3">
-                        <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
-                    </div>
-                    <h6 class="text-center mb-3">คุณต้องการลบข้อมูลทั้งหมดในเครื่องหรือไม่?</h6>
-                    <p class="text-center text-muted mb-4">การดำเนินการนี้ไม่สามารถย้อนกลับได้<br>ข้อมูลใน Google Sheets จะไม่ถูกลบ</p>
-                    
-                    <div class="form-floating">
-                        <input type="password" class="form-control" id="confirmPassword" placeholder="รหัสผ่าน">
-                        <label for="confirmPassword"><i class="fas fa-key me-2"></i>กรุณาใส่รหัสผ่านเพื่อยืนยัน</label>
-                    </div>
-                    
-                    <div id="passwordError" class="alert alert-danger d-none mt-3">
-                        <i class="fas fa-times-circle me-2"></i>รหัสผ่านไม่ถูกต้อง
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-2"></i>ยกเลิก
-                    </button>
-                    <button type="button" class="btn btn-danger" onclick="confirmClearData()">
-                        <i class="fas fa-trash me-2"></i>ลบข้อมูล
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Application -->
-    <div id="mainApp" class="main-app">
-        <!-- Navigation -->
-        <nav class="navbar navbar-expand-lg navbar-light navbar-custom fixed-top">
-            <div class="container">
-                <a class="navbar-brand" href="#">
-                    <i class="fas fa-utensils text-danger me-2"></i>
-                    <strong style="color: #dc3545;">Issho Izakaya</strong>
-                </a>
-                <div class="d-flex align-items-center">
-                    <span class="navbar-text me-3">
-                        <i class="fas fa-calendar-alt me-1"></i>
-                        <span id="currentDate"></span>
-                    </span>
-                    <span class="navbar-text me-3">
-                        <i class="fas fa-clock me-1"></i>
-                        <span id="currentTime"></span>
-                    </span>
-                    <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                        <i class="fas fa-sign-out-alt me-1"></i>ออกจากระบบ
-                    </button>
-                </div>
-            </div>
-        </nav>
-
-        <div class="container" style="margin-top: 100px;">
-            <!-- Alert Container -->
-            <div id="alertContainer"></div>
-
-            <!-- Stats Dashboard -->
-            <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="stats-card">
-                        <div class="stats-number" id="totalTables">0</div>
-                        <div>โต๊ะทั้งหมด</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stats-card">
-                        <div class="stats-number" id="totalCustomers">0</div>
-                        <div>ลูกค้าทั้งหมด</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stats-card">
-                        <div class="stats-number" id="totalRevenue">0</div>
-                        <div>ยอดขายรวม (฿)</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stats-card">
-                        <div class="stats-number" id="avgPerHead">0</div>
-                        <div>เฉลี่ยต่อหัว (฿)</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tab Navigation -->
-            <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="add-table-tab" data-bs-toggle="tab" data-bs-target="#add-table" type="button" role="tab">
-                        <i class="fas fa-plus me-2"></i>บันทึกโต๊ะใหม่
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="table-list-tab" data-bs-toggle="tab" data-bs-target="#table-list" type="button" role="tab">
-                        <i class="fas fa-list me-2"></i>รายการโต๊ะ
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button" role="tab">
-                        <i class="fas fa-chart-bar me-2"></i>วิเคราะห์ข้อมูล
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
-                        <i class="fas fa-cog me-2"></i>ตั้งค่า
-                    </button>
-                </li>
-            </ul>
-
-            <!-- Tab Content -->
-            <div class="tab-content" id="mainTabContent">
-                <!-- Add Table Tab -->
-                <div class="tab-pane fade show active" id="add-table" role="tabpanel">
-                    <div class="card card-custom">
-                        <div class="card-header bg-transparent">
-                            <h5 class="mb-0"><i class="fas fa-plus me-2 text-danger"></i>บันทึกข้อมูลโต๊ะใหม่</h5>
-                        </div>
-                        <div class="card-body">
-                            <form id="tableForm">
-                                <!-- Table Information -->
-                                <div class="row mb-4">
-                                    <div class="col-md-3 mb-3">
-                                        <label class="form-label">วันที่เข้าใช้บริการ *</label>
-                                        <input type="date" class="form-control" id="visitDate" required>
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <label class="form-label">หมายเลขโต๊ะ</label>
-                                        <input type="text" class="form-control" id="tableNumber" placeholder="เช่น T01, A5">
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <label class="form-label">กลุ่มลูกค้า *</label>
-                                        <select class="form-control" id="customerGroup" required>
-                                            <option value="">เลือกกลุ่ม</option>
-                                            <option value="คนเดียว">คนเดียว</option>
-                                            <option value="คู่รัก">คู่รัก</option>
-                                            <option value="กลุ่มเพื่อน">กลุ่มเพื่อน</option>
-                                            <option value="ครอบครัว">ครอบครัว</option>
-                                            <option value="องค์กร/บริษัท">องค์กร/บริษัท</option>
-                                            <option value="นักท่องเที่ยว">นักท่องเที่ยว</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <label class="form-label">ยอดขายรวม (฿) *</label>
-                                        <input type="number" class="form-control" id="totalBill" min="0" step="0.01" required>
-                                    </div>
-                                </div>
-
-                                <div class="row mb-4">
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">เวลาเข้าใช้บริการ *</label>
-                                        <select class="form-control" id="visitTime" required>
-                                            <option value="">เลือกช่วงเวลา</option>
-                                            <option value="11:00-12:00">11:00-12:00 น.</option>
-                                            <option value="12:00-13:00">12:00-13:00 น.</option>
-                                            <option value="13:00-14:00">13:00-14:00 น.</option>
-                                            <option value="14:00-15:00">14:00-15:00 น.</option>
-                                            <option value="15:00-16:00">15:00-16:00 น.</option>
-                                            <option value="16:00-17:00">16:00-17:00 น.</option>
-                                            <option value="17:00-18:00">17:00-18:00 น.</option>
-                                            <option value="18:00-19:00">18:00-19:00 น.</option>
-                                            <option value="19:00-20:00">19:00-20:00 น.</option>
-                                            <option value="20:00-21:00">20:00-21:00 น.</option>
-                                            <option value="21:00-22:00">21:00-22:00 น.</option>
-                                            <option value="22:00-23:00">22:00-23:00 น.</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">วิธีการชำระเงิน</label>
-                                        <select class="form-control" id="paymentMethod">
-                                            <option value="เงินสด">เงินสด</option>
-                                            <option value="บัตรเครดิต">บัตรเครดิต</option>
-                                            <option value="QR Code">QR Code</option>
-                                            <option value="โอนเงิน">โอนเงิน</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">โอกาสพิเศษ</label>
-                                        <select class="form-control" id="occasion">
-                                            <option value="">เลือกโอกาสพิเศษ</option>
-                                            <option value="วันเกิด">วันเกิด</option>
-                                            <option value="ครบรอบ">ครบรอบ</option>
-                                            <option value="ปาร์ตี้">ปาร์ตี้</option>
-                                            <option value="ประชุมงาน">ประชุมงาน</option>
-                                            <option value="วันหยุด">วันหยุด</option>
-                                            <option value="ทานมื้อเย็น">ทานมื้อเย็น</option>
-                                            <option value="นั่งชิล">นั่งชิล</option>
-                                            <option value="อื่นๆ">อื่นๆ</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <!-- Customer Details -->
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6><i class="fas fa-users me-2 text-danger"></i>รายละเอียดลูกค้าในโต๊ะ</h6>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addCustomer()">
-                                        <i class="fas fa-plus me-1"></i>เพิ่มลูกค้า
-                                    </button>
-                                </div>
-
-                                <div id="customersContainer">
-                                    <!-- Customer cards will be added here -->
-                                </div>
-
-                                <div class="row mt-4">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">ระดับความพึงพอใจ</label>
-                                        <select class="form-control" id="satisfaction">
-                                            <option value="">เลือกระดับ</option>
-                                            <option value="5">★★★★★ ดีเยี่ยม</option>
-                                            <option value="4">★★★★☆ ดี</option>
-                                            <option value="3">★★★☆☆ ปานกลาง</option>
-                                            <option value="2">★★☆☆☆ พอใช้</option>
-                                            <option value="1">★☆☆☆☆ ต้องปรับปรุง</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">หมายเหตุเพิ่มเติม</label>
-                                        <textarea class="form-control" id="notes" rows="2" placeholder="ข้อมูลเพิ่มเติม, ปัญหาที่พบ, ข้อเรียกร้องพิเศษ, คำแนะนำจากลูกค้า"></textarea>
-                                    </div>
-                                </div>
-
-                                <div class="text-end">
-                                    <button type="button" class="btn btn-secondary me-2" onclick="resetForm()">
-                                        <i class="fas fa-undo me-2"></i>ล้างข้อมูล
-                                    </button>
-                                    <button type="submit" class="btn btn-primary-custom" id="submitBtn">
-                                        <i class="fas fa-save me-2"></i>บันทึกข้อมูล
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Table List Tab -->
-                <div class="tab-pane fade" id="table-list" role="tabpanel">
-                    <div class="card card-custom">
-                        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0"><i class="fas fa-list me-2 text-danger"></i>รายการโต๊ะ</h5>
-                            <div class="d-flex">
-                                <button class="btn btn-outline-primary me-2" onclick="loadDataFromSheets()">
-                                    <i class="fas fa-sync-alt me-2"></i>โหลดข้อมูลใหม่
-                                </button>
-                                <input type="text" class="form-control" id="searchTable" placeholder="
+</html>
