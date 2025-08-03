@@ -1075,13 +1075,130 @@
                                     <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>วิธีการตั้งค่า Google Sheets</h6>
                                 </div>
                                 <div class="card-body">
-                                    <ol class="mb-0">
+                                    <ol class="mb-3">
                                         <li class="mb-2">สร้าง Google Sheets ใหม่และตั้งชื่อคอลัมน์ตามที่กำหนด</li>
                                         <li class="mb-2">เปิด Extensions > Apps Script</li>
-                                        <li class="mb-2">วาง Code ที่ให้ไว้และ Deploy เป็น Web App</li>
+                                        <li class="mb-2">วาง Code ด้านล่างและ Deploy เป็น Web App</li>
+                                        <li class="mb-2">ตั้งค่า: Execute as "Me", Access to "Anyone"</li>
                                         <li class="mb-2">คัดลอก URL ที่ได้มาใส่ในช่องด้านบน</li>
                                         <li>ทดสอบการเชื่อมต่อ</li>
                                     </ol>
+                                    
+                                    <div class="alert alert-info">
+                                        <h6><i class="fas fa-code me-2"></i>Google Apps Script Code ที่ใช้:</h6>
+                                        <pre class="mt-2" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-size: 0.9rem; overflow-x: auto;">
+<code>function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    const test = e.parameter.test;
+    
+    if (test) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Connection test successful"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    if (action === 'getData') {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+      const data = sheet.getDataRange().getValues();
+      
+      if (data.length <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          data: [],
+          message: "No data found"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const headers = data[0];
+      const tables = [];
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const table = {};
+        
+        headers.forEach((header, index) => {
+          table[header] = row[index];
+        });
+        
+        // Parse customers data if exists
+        if (table.customers && typeof table.customers === 'string') {
+          try {
+            table.customers = JSON.parse(table.customers);
+          } catch (e) {
+            table.customers = [];
+          }
+        }
+        
+        tables.push(table);
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        data: tables,
+        message: `Loaded ${tables.length} records`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      error: "Invalid action"
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      error: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // Check if headers exist
+    const lastRow = sheet.getLastRow();
+    if (lastRow === 0) {
+      // Add headers
+      const headers = [
+        'id', 'date', 'visitDate', 'tableNumber', 'customerGroup', 
+        'totalBill', 'visitTime', 'paymentMethod', 'occasion', 
+        'satisfaction', 'notes', 'customers'
+      ];
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    }
+    
+    // Add data
+    const row = [
+      data.id,
+      data.date,
+      data.visitDate,
+      data.tableNumber,
+      data.customerGroup,
+      data.totalBill,
+      data.visitTime,
+      data.paymentMethod,
+      data.occasion,
+      data.satisfaction,
+      data.notes,
+      JSON.stringify(data.customers)
+    ];
+    
+    sheet.appendRow(row);
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      message: "Data saved successfully"
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      error: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}</code></pre>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1819,13 +1936,13 @@
                 try {
                     updateConnectionStatus('sending');
                     
-                    await fetch(this.scriptUrl, {
+                    const response = await fetch(this.scriptUrl, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
+                            'Content-Type': 'text/plain;charset=utf-8',
                         },
                         body: JSON.stringify(data),
-                        mode: 'no-cors'
+                        redirect: 'follow'
                     });
 
                     updateConnectionStatus('online');
@@ -1847,27 +1964,40 @@
                     
                     console.log('Fetching data from:', this.scriptUrl + '?action=getData');
                     
-                    // Try to fetch data from Google Sheets
+                    // Try to fetch data from Google Sheets using GET request
                     const response = await fetch(this.scriptUrl + '?action=getData', {
                         method: 'GET',
                         headers: {
-                            'Content-Type': 'application/json',
-                        }
+                            'Content-Type': 'text/plain;charset=utf-8',
+                        },
+                        redirect: 'follow'
                     });
                     
                     console.log('Response status:', response.status);
                     
                     if (response.ok) {
-                        const data = await response.json();
-                        console.log('Received data:', data);
+                        const responseText = await response.text();
+                        console.log('Raw response:', responseText);
                         
-                        updateConnectionStatus('online');
-                        
-                        return { 
-                            success: true, 
-                            data: data.tables || [], 
-                            message: data.message || 'โหลดข้อมูลจาก Google Sheets สำเร็จ' 
-                        };
+                        try {
+                            const data = JSON.parse(responseText);
+                            console.log('Parsed data:', data);
+                            
+                            updateConnectionStatus('online');
+                            
+                            return { 
+                                success: true, 
+                                data: data.tables || data.data || data || [], 
+                                message: data.message || 'โหลดข้อมูลจาก Google Sheets สำเร็จ' 
+                            };
+                        } catch (parseError) {
+                            console.error('JSON Parse error:', parseError);
+                            return { 
+                                success: false, 
+                                data: [], 
+                                message: 'ข้อมูลที่ได้รับไม่ใช่ JSON format' 
+                            };
+                        }
                     } else {
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
@@ -1892,13 +2022,20 @@
                 try {
                     updateConnectionStatus('testing');
                     
-                    await fetch(this.scriptUrl, {
+                    const response = await fetch(this.scriptUrl + '?test=true', {
                         method: 'GET',
-                        mode: 'no-cors'
+                        headers: {
+                            'Content-Type': 'text/plain;charset=utf-8',
+                        },
+                        redirect: 'follow'
                     });
 
-                    updateConnectionStatus('online');
-                    return { success: true, message: 'เชื่อมต่อ Google Sheets สำเร็จ' };
+                    if (response.ok) {
+                        updateConnectionStatus('online');
+                        return { success: true, message: 'เชื่อมต่อ Google Sheets สำเร็จ' };
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
                     
                 } catch (error) {
                     updateConnectionStatus('error');
