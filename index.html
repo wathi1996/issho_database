@@ -636,8 +636,8 @@
                                                 <input type="date" class="form-control" id="visitDate" required>
                                             </div>
                                             <div class="col-md-6 mb-3">
-                                                <label class="form-label">หมายเลขโต๊ะ</label>
-                                                <input type="text" class="form-control" id="tableNumber" placeholder="เช่น T01, A5">
+                                                <label class="form-label">หมายเลขโต๊ะ (Auto)</label>
+                                                <input type="text" class="form-control" id="tableNumber" placeholder="จะสร้างอัตโนมัติ" readonly style="background-color: #f8f9fa;">
                                             </div>
                                         </div>
                                         <div class="row">
@@ -2296,11 +2296,17 @@ function doPost(e) {
                     throw new Error('กรุณาใส่ข้อมูลลูกค้าอย่างน้อย 1 คน');
                 }
                 
+                // Generate auto table number
+                const currentDate = document.getElementById('visitDate').value;
+                const dateStr = currentDate.replace(/-/g, '');
+                const timeStr = new Date().getTime().toString().slice(-4);
+                const autoTableNumber = `T${dateStr}-${timeStr}`;
+                
                 const tableData = {
                     id: Date.now(),
                     date: new Date().toISOString(),
                     visitDate: document.getElementById('visitDate').value,
-                    tableNumber: document.getElementById('tableNumber').value || 'ไม่ระบุ',
+                    tableNumber: autoTableNumber,
                     customerGroup: document.getElementById('customerGroup').value,
                     totalBill: parseFloat(document.getElementById('totalBill').value),
                     visitTime: document.getElementById('visitTime').value,
@@ -2322,14 +2328,14 @@ function doPost(e) {
                 if (googleAPI.scriptUrl) {
                     googleAPI.sendData(tableData)
                         .then(result => {
-                            showSuccessAlert(`บันทึกข้อมูลสำเร็จ! (${customers.length} คน)\n${result.message}`);
+                            showSuccessAlert(`บันทึกข้อมูลสำเร็จ! โต๊ะ ${autoTableNumber} (${customers.length} คน)\n${result.message}`);
                         })
                         .catch(error => {
                             console.error('Google Sheets error:', error);
-                            showWarningAlert(`บันทึกในเครื่องสำเร็จ แต่ส่งไป Google Sheets ไม่ได้\n${error.message}`);
+                            showWarningAlert(`บันทึกในเครื่องสำเร็จ แต่ส่งไป Google Sheets ไม่ได้\nโต๊ะ ${autoTableNumber} - ${error.message}`);
                         });
                 } else {
-                    showSuccessAlert(`บันทึกข้อมูลในเครื่องสำเร็จ! (${customers.length} คน)\nยังไม่ได้ตั้งค่า Google Sheets`);
+                    showSuccessAlert(`บันทึกข้อมูลในเครื่องสำเร็จ! โต๊ะ ${autoTableNumber} (${customers.length} คน)\nยังไม่ได้ตั้งค่า Google Sheets`);
                 }
                 
                 resetForm();
