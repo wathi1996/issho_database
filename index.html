@@ -1235,27 +1235,48 @@ function doPost(e) {
                     console.log('Google Sheets result:', result);
                     
                     if (result.success && result.data && result.data.length > 0) {
-                        // Use Google Sheets data as primary source
-                        filteredTables = result.data;
+                        // ใช้ข้อมูลจาก Google Sheets เป็นหลัก และเพิ่มข้อมูล local ที่ไม่มีใน Sheets
+                        const sheetsData = result.data;
+                        let newFromLocal = 0;
+                        let totalFromSheets = sheetsData.length;
                         
-                        // Also merge with local data to avoid losing recent entries
-                        const mergedData = [...result.data];
+                        // สร้าง Set ของ ID ที่มีใน Google Sheets
+                        const sheetsIds = new Set(sheetsData.map(item => item.id));
+                        const sheetsTableNumbers = new Set(sheetsData.map(item => item.tableNumber));
+                        
+                        // เพิ่มข้อมูล local ที่ไม่มีใน Google Sheets
+                        const mergedData = [...sheetsData];
+                        
                         tables.forEach(localTable => {
-                            const exists = result.data.find(sheetTable => 
-                                Math.abs(new Date(sheetTable.visitDate) - new Date(localTable.visitDate)) < 86400000 && // same day
-                                sheetTable.tableNumber === localTable.tableNumber &&
-                                Math.abs(sheetTable.totalBill - localTable.totalBill) < 0.01 // same bill amount
-                            );
+                            // ตรวจสอบว่าข้อมูลนี้มีใน Google Sheets แล้วหรือไม่
+                            const existsById = sheetsIds.has(localTable.id);
+                            const existsByTableNumber = sheetsTableNumbers.has(localTable.tableNumber);
                             
-                            if (!exists) {
+                            // ถ้าไม่มีทั้ง ID และ tableNumber ใน Google Sheets ให้เพิ่มเข้าไป
+                            if (!existsById && !existsByTableNumber) {
                                 mergedData.push(localTable);
+                                newFromLocal++;
+                                console.log('Added local table:', localTable.tableNumber);
                             }
                         });
                         
+                        // อัปเดต tables ด้วยข้อมูลที่ merge แล้ว
+                        tables = mergedData;
                         filteredTables = mergedData;
-                        showSuccessAlert(`ซิงค์สำเร็จ! แสดงข้อมูล ${mergedData.length} โต๊ะ (${result.data.length} จาก Google Sheets)`);
+                        
+                        // บันทึกข้อมูลที่ merge แล้วใน local storage
+                        saveLocalData();
+                        
+                        let message = `ซิงค์สำเร็จ! `;
+                        if (newFromLocal > 0) {
+                            message += `โหลด ${totalFromSheets} โต๊ะจาก Google Sheets + เพิ่ม ${newFromLocal} โต๊ะจากเครื่องนี้ = รวม ${mergedData.length} โต๊ะ`;
+                        } else {
+                            message += `โหลด ${totalFromSheets} โต๊ะจาก Google Sheets (ข้อมูลตรงกันแล้ว)`;
+                        }
+                        
+                        showSuccessAlert(message);
                     } else {
-                        // Use only local data
+                        // ไม่มีข้อมูลใน Google Sheets ใช้ข้อมูล local
                         filteredTables = [...tables];
                         showWarningAlert(`ใช้ข้อมูลในเครื่อง ${tables.length} โต๊ะ - ${result.message || 'ไม่พบข้อมูลใน Google Sheets'}`);
                     }
@@ -1264,8 +1285,10 @@ function doPost(e) {
                     showWarningAlert('ยังไม่ได้ตั้งค่า Google Sheets URL - ใช้ข้อมูลในเครื่อง');
                 }
                 
-                console.log('Filtered tables:', filteredTables.length);
+                console.log('Final filtered tables:', filteredTables.length);
                 applyFilters();
+                updateStats();
+                updateTableList();
                 
             } catch (error) {
                 console.error('Sync error:', error);
@@ -2199,34 +2222,19 @@ function doPost(e) {
             googleAPI.loadData()
                 .then(result => {
                     if (result.success && result.data.length > 0) {
-                        // Merge with local data
+                        // Replace local data completely with Google Sheets data
                         const sheetsData = result.data;
-                        let newDataCount = 0;
+                        console.log('Loaded from sheets:', sheetsData);
                         
-                        sheetsData.forEach(sheetTable => {
-                            const exists = tables.find(localTable => 
-                                localTable.id === sheetTable.id ||
-                                (localTable.visitDate === sheetTable.visitDate && 
-                                 localTable.tableNumber === sheetTable.tableNumber &&
-                                 localTable.totalBill === sheetTable.totalBill)
-                            );
-                            
-                            if (!exists) {
-                                tables.push(sheetTable);
-                                newDataCount++;
-                            }
-                        });
+                        // อัปเดต tables ด้วยข้อมูลจาก Google Sheets
+                        tables = [...sheetsData];
                         
-                        // Save merged data locally
+                        // บันทึกข้อมูลใหม่ใน local storage
                         saveLocalData();
                         updateStats();
                         updateTableList();
                         
-                        if (newDataCount > 0) {
-                            showSuccessAlert(`โหลดข้อมูลใหม่ ${newDataCount} โต๊ะจาก Google Sheets (รวม ${tables.length} โต๊ะ)`);
-                        } else {
-                            showSuccessAlert(`ข้อมูลล่าสุดแล้ว - มีข้อมูลทั้งหมด ${tables.length} โต๊ะ`);
-                        }
+                        showSuccessAlert(`โหลดข้อมูลใหม่ ${sheetsData.length} โต๊ะจาก Google Sheets สำเร็จ`);
                     } else {
                         showSuccessAlert(`${result.message} - มีข้อมูลในเครื่อง ${tables.length} โต๊ะ`);
                     }
